@@ -34,9 +34,15 @@ if not stop early, the model will overfit and generate a larger loss
 ***TensorBoard*** <br>
 is a tool for providing the (INSTANT) measurements and visualizations needed during the machine learning workflow <br>
 
+***Classification report*** <br>
+Precision: tp / actual result = tp / (tp + fp)   <br>
+Recall: tp / predicted result = tp/(tp + fn)  <br>
+F1 = 2 * (precision * recall) / (precision + recall) <br>
+support is the number of samples of the true response <br>
 
 ## Guideline of TensorBoard
 type command: tensorboard --logdir=C:/Users/Auyin/PycharmProjects/churn-prediction/train_valid_log/
 
 ## Dataset
 https://www.kaggle.com/c/churn-modelling
+
