@@ -71,33 +71,32 @@ class NNDataPreprocess:
 
         return list_added_col
 
-    # def __declare_dataloader_parmas(self):
-    #     self.dataloader_params = {
-    #         'batch_size': 1000,
-    #         'shuffle': False,
-    #         #                                 'num_workers': 1
-    #     }
+    def _prepare_train_valid_dataloader(self, batch_size, shuffle):
 
-    def _create_dataloader(self, batch_size, shuffle):
-        # self.__declare_dataloader_parmas()
-
+        # training set: train model, validation set: valid model
+        # find best parmas
         self.train_loader = DataLoader(ChurnPredictionDataset(
             self.ts_train_categ_data,
             self.ts_train_numer_data,
             self.ts_train_output_data,
         ), batch_size=batch_size, shuffle=shuffle)
 
-        self.test_loader = DataLoader(ChurnPredictionDataset(
-            self.ts_test_categ_data,
-            self.ts_test_numer_data,
-            self.ts_test_output_data,
-        ), batch_size=batch_size, shuffle=shuffle)
-
+        # training set: train model, validation set: valid model
+        # find best parmas
         self.valid_loader = DataLoader(ChurnPredictionDataset(
             self.ts_valid_categ_data,
             self.ts_valid_numer_data,
             self.ts_valid_output_data,
         ), batch_size=batch_size, shuffle=shuffle)
+
+    def _prepare_test_dataloader(self, batch_size):
+
+        # use to test model
+        self.test_loader = DataLoader(ChurnPredictionDataset(
+            self.ts_test_categ_data,
+            self.ts_test_numer_data,
+            self.ts_test_output_data,
+        ), batch_size=batch_size)
 
     def __train_test_split(self):
         self.num_test_records = int(self.test_fraction * self.df_all_data.shape[0])

@@ -28,7 +28,7 @@ class EarlyStopping:
         self.path = path
         self.trace_func = trace_func
 
-    def __call__(self, val_loss, model):
+    def __call__(self, model, val_loss):
 
         score = -val_loss
 
@@ -43,7 +43,7 @@ class EarlyStopping:
         else:
             self.best_score = score
             # assign the best score to the model
-            model.best_valid_loss = - self.best_score
+            model.best_valid_loss = val_loss
             self.save_checkpoint(val_loss, model)
             self.counter = 0
 
