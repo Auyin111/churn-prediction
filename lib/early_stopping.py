@@ -42,6 +42,8 @@ class EarlyStopping:
                 self.early_stop = True
         else:
             self.best_score = score
+            # assign the best score to the model
+            model.best_valid_loss = - self.best_score
             self.save_checkpoint(val_loss, model)
             self.counter = 0
 
