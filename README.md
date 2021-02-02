@@ -10,7 +10,7 @@ Finally, the corresponding classification report is created <br>
 ## Model tuning
 Allow to test diff. kind of parmas. easily in a dictionary, such as <br>
 optimizer, dataloader, loss function, model structure and parmas <br>
-![Image 1](declare_tuning_parmas.png) <br><br> 
+![Image 1](declare_tuning_parmas.png) <br><br>
 
 The training and validation curve will be stored and display on tensorboard ***instantly*** <br>
 you can stop a model if you find the trend is not good in any time <br>
