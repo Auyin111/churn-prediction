@@ -13,13 +13,10 @@ from lib.early_stopping import EarlyStopping
 
 class ChurnPrediction:
 
-    def __init__(self, df_all_data, is_display_detail=True, is_display_batch_info = False,
-                 log_dir='C:/Users/Auyin/PycharmProjects/churn-prediction/train_valid_log',
-                 ):
+    def __init__(self, df_all_data, is_display_detail=True, is_display_batch_info=False,):
 
         self.is_display_detail = is_display_detail
         self.is_display_batch_info = is_display_batch_info
-        self.log_dir = log_dir
 
         self._NNDataP = NNDataPreprocess(df_all_data, test_fraction=0.2)
 
@@ -49,6 +46,9 @@ class ChurnPrediction:
         self.patience = None
         self.early_stopping = None
 
+        self.is_log_in_tsboard = None
+        self.log_dir = None
+
         self.list_train_acc = None
         self.list_train_loss = None
         self.list_valid_acc = None
@@ -67,7 +67,7 @@ class ChurnPrediction:
         parameters = dict(
 
             # optimizer_parmas
-            lr=[.01, .02],
+            lr=[.02, 0.1],
 
             # dataloader_parmas
             batch_size=[1000],
@@ -77,8 +77,8 @@ class ChurnPrediction:
             class_weight=[None, torch.tensor([0.8, 1])],
 
             # model_parmas
-            dropout_percent=[0.4],
-            list_layers_input_size=[[200, 100, 50]]
+            dropout_percent=[0.3, 0.5],
+            list_layers_input_size=[[400, 200, 100, 50], [100, 50]]
         )
 
         self.list_all_combinations = list(self.product_dict(**parameters))
@@ -142,10 +142,8 @@ class ChurnPrediction:
         self._NNDataP._prepare_train_valid_dataloader(batch_size=self.batch_size, shuffle=self.shuffle)
 
 
-    def __prepare_model_desc(self, is_train_model):
+    def __prepare_parmas_desc(self, is_train_model):
         """mark down the detail time and parmas"""
-
-        self.str_ymd_hms = datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
 
         self.str_parmas_desc = ''
 
@@ -170,10 +168,12 @@ class ChurnPrediction:
 
     def __create_tsboard_writer(self, tsboard_remark=''):
 
+        # Comment log_dir suffix appended to the default log_dir. If log_dir is assigned, this argument has no effect.
         if self.log_dir is not None:
-            self.writer = SummaryWriter(f'{self.log_dir}/{self.str_ymd_hms}{tsboard_remark}{self.str_parmas_desc}')
+            str_ymd_hms = datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
+            self.writer = SummaryWriter(log_dir=f'{self.log_dir}/{str_ymd_hms}{tsboard_remark}{self.str_parmas_desc}')
         else:
-            self.writer = SummaryWriter()
+            self.writer = SummaryWriter(comment=f'_{tsboard_remark}{self.str_parmas_desc}')
 
     def train_model(self, dataloader, str_tsboard_subgrp='Train sets'):
 
@@ -212,7 +212,7 @@ class ChurnPrediction:
         if self.is_display_detail:
             print(f'Train loss: {loss:.4f}, train acc: {accuracy:.4f}')
 
-        if self.log_dir is not None:
+        if self.is_log_in_tsboard:
             self.writer.add_scalar(
                 f'Loss/{str_tsboard_subgrp}', loss, self.epoch
             )
@@ -248,7 +248,7 @@ class ChurnPrediction:
             if self.is_display_detail:
                 print(f'Valid loss: {valid_loss:.4f}, valid acc: {valid_accuracy:.4f}')
 
-            if self.log_dir is not None:
+            if self.is_log_in_tsboard:
                 self.writer.add_scalar(
                     f'Loss/{str_tsboard_subgrp}', valid_loss, self.epoch
                 )
@@ -264,9 +264,14 @@ class ChurnPrediction:
         self.early_stopping(self.nn_model, valid_loss)
 
     # find best model
-    def find_best_parmas_by_valid_loss(self, num_max_epochs=10, patience=10, is_test_model=True):
+    def find_best_parmas_by_valid_loss(self, num_max_epochs=10, patience=10,
+                                       is_test_model=True, is_log_in_tsboard=True,
+                                       log_dir=None):
         """is_refit: Refit an estimator using the best found parameters on the whole dataset.
         the best parameters is considered by the best valid loss"""
+
+        self.is_log_in_tsboard = is_log_in_tsboard
+        self.log_dir = log_dir
 
         for model_idx, dict_parmas in enumerate(self.list_all_combinations):
 
@@ -276,7 +281,7 @@ class ChurnPrediction:
             self.__extract_parmas(dict_parmas, is_train_model=True)
             self.__load_parmas(is_train_model=True)
 
-            self.__prepare_model_desc(is_train_model=True)
+            self.__prepare_parmas_desc(is_train_model=True)
             self.__create_tsboard_writer()
 
             self.early_stopping = EarlyStopping(patience=self.patience, verbose=self.is_display_detail)
@@ -349,8 +354,7 @@ class ChurnPrediction:
         self.__extract_parmas(self.best_parmas_to_test_model, is_train_model=False)
         self.__load_parmas(is_train_model=False)
 
-        self.__prepare_model_desc(is_train_model=False)
-        self.__create_tsboard_writer()
+        self.__prepare_parmas_desc(is_train_model=False)
 
         self.list_test_acc = []
         self.list_test_loss = []
