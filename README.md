@@ -5,7 +5,7 @@ It can be use to find the churn customer and try to keep them in the future <br>
 ## Performance
 After test diff. kind of parmas., a best model is found by comparing best validation loss<br>
 Finally, the corresponding classification report is created <br>
-<img src= "https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/performance.png" height = 400/> <br><br> 
+![performance](readme%20photo/performance.png)
 
 ## Model tuning
 Allow to test diff. kind of parmas. easily in a dictionary, such as <br>
