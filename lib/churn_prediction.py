@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from lib.data_preprocessor import NNDataPreprocess
 from lib.model import NNModel
 from lib.early_stopping import EarlyStopping
+from lib.chart_visualizer import ChartVisualizer
 
 
 class ChurnPrediction:
@@ -19,6 +20,7 @@ class ChurnPrediction:
         self.is_display_batch_info = is_display_batch_info
 
         self._NNDataP = NNDataPreprocess(df_all_data, test_fraction=0.2)
+        self._chart_visual = ChartVisualizer()
 
         self.__declare_tuning_parmas()
 
@@ -58,6 +60,8 @@ class ChurnPrediction:
 
         self.ts_test_pred_label = None
 
+        print("ChurnPrediction object created")
+
     def preview_model(self):
 
         return print(self.nn_model)
@@ -82,8 +86,16 @@ class ChurnPrediction:
         )
 
         self.list_all_combinations = list(self.product_dict(**parameters))
-
         self.__df_all_combinations = pd.DataFrame(self.list_all_combinations)
+
+    def show_label_distribution(self):
+
+        df_label_pie_chart = self._NNDataP._prepare_plot_pie_ftr_distribution()
+        self._chart_visual.plot_pie_label_distribution(df_label_pie_chart,
+                                                       'counts', 'status', 'Exited and not Exited distribution')
+
+    def show_tuning_combinations(self):
+
         print(f'num of combination: {len(self.__df_all_combinations)}')
         display(self.__df_all_combinations)
 

@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -14,6 +15,8 @@ class ChurnPredictionDataset(Dataset):
 
         if (len(self.ts_x_categ) != len(self.ts_y)) or (len(self.ts_x_numer) != len(self.ts_y)):
             raise Exception("The length of X does not match the length of Y")
+
+        print("ChurnPredictionDataset object created")
 
     def __len__(self):
         return len(self.ts_x_categ)
@@ -132,3 +135,15 @@ class NNDataPreprocess:
     @staticmethod
     def __convert_df_to_ts(df_targeted, dtype):
         return torch.tensor(df_targeted.values, dtype=dtype)
+
+    # __________plot chart__________
+
+    def _prepare_plot_pie_ftr_distribution(self):
+
+        df_output = self.df_all_data[self.list_col_outputs]
+        df_output.loc[:, 'status'] = np.where(df_output.Exited == 1, 'Exit', 'Not Exit')
+
+        df_label_pie_chart = df_output.groupby('status').agg({'status': 'count'}).rename(columns={'status': 'counts'})
+        df_label_pie_chart = df_label_pie_chart.reset_index()
+
+        return df_label_pie_chart
