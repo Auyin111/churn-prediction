@@ -10,7 +10,7 @@ The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not pe
 
 Then, I view the CV training and validation curve to find the reason <br>
 
-![accuracy of training and validation curve](readme%20photo/accuracy of training and validation curve.png)<br><br>
+![accuracy of training and validation curve](readme%20photo/accuracy of training and validation curve.png)<br><br> 
 ![loss of training and validation curve](readme%20photo/loss of training and validation curve.png)<br><br>
 Compare the training and validation curve in tensorboard, I found that the ***best model*** performance ***(loss and accuracy)*** of training and validation are very close to each other <br>
 It should be cause by lack of enough training data or the features are not enough to predict the result. <br>
