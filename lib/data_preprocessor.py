@@ -1,6 +1,9 @@
 import torch
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from torch.utils.data import Dataset, DataLoader, Subset
+pd.set_option('mode.chained_assignment', None)
 
 
 class ChurnPredictionDataset(Dataset):
@@ -43,6 +46,7 @@ class NNDataPreprocess:
         self.__train_test_split()
 
 
+
     def __declare_interested_col_type(self):
         """only consider the interested col in the function
         and define the types of col --> affect the step of preprocessing"""
@@ -74,63 +78,79 @@ class NNDataPreprocess:
 
         return list_added_col
 
-    def _prepare_train_valid_dataloader(self, batch_size, shuffle):
-
-        # training set: train model, validation set: valid model
-        # find best parmas
-        self.train_loader = DataLoader(ChurnPredictionDataset(
-            self.ts_train_categ_data,
-            self.ts_train_numer_data,
-            self.ts_train_output_data,
-        ), batch_size=batch_size, shuffle=shuffle)
-
-        # training set: train model, validation set: valid model
-        # find best parmas
-        self.valid_loader = DataLoader(ChurnPredictionDataset(
-            self.ts_valid_categ_data,
-            self.ts_valid_numer_data,
-            self.ts_valid_output_data,
-        ), batch_size=batch_size, shuffle=shuffle)
+    # def _prepare_train_valid_dataloader(self, batch_size, shuffle):
+    #
+    #     # training set: train model, validation set: valid model
+    #     # find best parmas
+    #     self.train_loader = DataLoader(ChurnPredictionDataset(
+    #         self.ts_train_categ_data,
+    #         self.ts_train_numer_data,
+    #         self.ts_train_output_data,
+    #     ), batch_size=batch_size, shuffle=shuffle)
+    #
+    #     # training set: train model, validation set: valid model
+    #     # find best parmas
+    #     self.valid_loader = DataLoader(ChurnPredictionDataset(
+    #         self.ts_valid_categ_data,
+    #         self.ts_valid_numer_data,
+    #         self.ts_valid_output_data,
+    #     ), batch_size=batch_size, shuffle=shuffle)
 
     def _prepare_test_dataloader(self, batch_size):
 
         # use to test model
         self.test_loader = DataLoader(ChurnPredictionDataset(
-            self.ts_test_categ_data,
-            self.ts_test_numer_data,
-            self.ts_test_output_data,
+            self.ts_categ_test,
+            self.ts_numer_test,
+            self.ts_output_test,
         ), batch_size=batch_size)
 
-    def __train_test_split(self):
-        self.num_test_records = int(self.test_fraction * self.df_all_data.shape[0])
-        self.num_valid_records = int(self.valid_fraction * self.df_all_data.shape[0])
+    def __train_test_split(self, test_size=0.2, random_state=42, is_stratify=True):
+        """is_stratify do not accept bool"""
+
+        self.num_test_records = 1000
+        self.num_valid_records = 1000
 
         # categorical data
         ts_categ_data = self.__convert_df_to_ts(self.df_all_data[self.list_col_converted_categorical], torch.int64)
-        self.ts_train_categ_data, self.ts_valid_categ_data, self.ts_test_categ_data = self.__get_ts_train_valid_test(
-            ts_categ_data)
 
         # numerical data
         ts_numer_data = self.__convert_df_to_ts(self.df_all_data[self.list_col_numerical], torch.float)
-        self.ts_train_numer_data, self.ts_valid_numer_data, self.ts_test_numer_data = self.__get_ts_train_valid_test(
-            ts_numer_data)
 
         # output
         ts_output_data = self.__convert_df_to_ts(self.df_all_data[self.list_col_outputs], None).flatten()
-        self.ts_train_output_data, self.ts_valid_output_data, self.ts_test_output_data = self.__get_ts_train_valid_test(
-            ts_output_data)
 
-    def __get_train_data(self, df_targeted):
-        return df_targeted[0:-self.num_test_records - self.num_valid_records]
+        self.ts_categ_train, self.ts_categ_test, self.ts_numer_train, self.ts_numer_test, \
+        self.ts_output_train, self.ts_output_test = train_test_split(
+            ts_categ_data, ts_numer_data, ts_output_data, test_size=test_size,
+            random_state=random_state,
+            stratify=ts_output_data if is_stratify else None)
 
-    def __get_valid_data(self, df_targeted):
-        return df_targeted[-self.num_test_records - self.num_valid_records: -self.num_test_records]
+    def prepare_cv_dataloader(self, train_index, valid_index, batch_size, shuffle):
 
-    def __get_test_data(self, df_targeted):
-        return df_targeted[-self.num_test_records:]
+        # train set --> split to train and validation set
+        set_ts_categ_train = Subset(self.ts_categ_train, train_index)
+        set_ts_categ_valid = Subset(self.ts_categ_train, valid_index)
 
-    def __get_ts_train_valid_test(self, ts_data):
-        return self.__get_train_data(ts_data), self.__get_valid_data(ts_data), self.__get_test_data(ts_data)
+        set_ts_numer_train = Subset(self.ts_numer_train, train_index)
+        set_ts_numer_valid = Subset(self.ts_numer_train, valid_index)
+
+        self.set_ts_output_train = Subset(self.ts_output_train, train_index)
+        set_ts_output_valid = Subset(self.ts_output_train, valid_index)
+
+        self.train_loader = DataLoader(ChurnPredictionDataset(
+            set_ts_categ_train,
+            set_ts_numer_train,
+            self.set_ts_output_train,
+        ), batch_size=batch_size, shuffle=shuffle)
+
+        self.valid_loader = DataLoader(ChurnPredictionDataset(
+            set_ts_categ_valid,
+            set_ts_numer_valid,
+            set_ts_output_valid,
+        ), batch_size=batch_size, shuffle=shuffle)
+
+
 
     @staticmethod
     def __convert_df_to_ts(df_targeted, dtype):

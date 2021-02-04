@@ -25,6 +25,8 @@ class NNModel(nn.Module):
 
         self.layers = nn.Sequential(*all_layers)
 
+        print("NNModel object created")
+
     def forward(self, x_categorical, x_numerical):
         embeddings = []
         for i,e in enumerate(self.all_embeddings):
