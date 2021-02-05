@@ -16,9 +16,12 @@ Compare the training and validation curve in tensorboard, I found that the ***be
 It should be cause by lack of enough training data or the features are not enough to predict the result. <br>
 
 Finally, I created ***train set*** classification report and compare to ***test set*** classification report <br>
-So, it can prove that the bad recall of 'Exited' is not come from Overfitting but come from Underfitting.
-Hence, more data should be collect and more features should be defined. <br>
+So, it can prove that the bad recall of 'Exited' is not come from Overfitting but come from Underfitting. <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__train_set.png" width="50%" height="50%"> <br>
+
+Also, the number of 'Exit' data is very small <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/dataset_detail.png" width="50%" height="50%"> <br>
+Hence, more data should be collect and more features should be defined. <br>
 
 ## Model tuning
 Allow to test diff. kind of parmas. easily in a dictionary, such as <br>
