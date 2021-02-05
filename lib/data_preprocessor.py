@@ -45,8 +45,6 @@ class NNDataPreprocess:
 
         self.__train_test_split()
 
-
-
     def __declare_interested_col_type(self):
         """only consider the interested col in the function
         and define the types of col --> affect the step of preprocessing"""
@@ -77,24 +75,6 @@ class NNDataPreprocess:
             list_added_col.append(list_col_converted_categorical)
 
         return list_added_col
-
-    # def _prepare_train_valid_dataloader(self, batch_size, shuffle):
-    #
-    #     # training set: train model, validation set: valid model
-    #     # find best parmas
-    #     self.train_loader = DataLoader(ChurnPredictionDataset(
-    #         self.ts_train_categ_data,
-    #         self.ts_train_numer_data,
-    #         self.ts_train_output_data,
-    #     ), batch_size=batch_size, shuffle=shuffle)
-    #
-    #     # training set: train model, validation set: valid model
-    #     # find best parmas
-    #     self.valid_loader = DataLoader(ChurnPredictionDataset(
-    #         self.ts_valid_categ_data,
-    #         self.ts_valid_numer_data,
-    #         self.ts_valid_output_data,
-    #     ), batch_size=batch_size, shuffle=shuffle)
 
     def _prepare_test_dataloader(self, batch_size):
 

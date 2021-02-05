@@ -84,7 +84,7 @@ class ChurnPrediction:
 
             # model_parmas
             dropout_percent=[0.4],
-            list_layers_input_size=[[400, 200, 100, 50], [100, 50]]
+            list_layers_input_size=[[200, 100, 50], [50, 20]]
         )
 
         self.list_all_combinations = list(self.product_dict(**parameters))
@@ -228,10 +228,10 @@ class ChurnPrediction:
 
         if self.is_log_in_tsboard:
             self.writer.add_scalar(
-                f'Loss/{str_tsboard_subgrp}_cv_{self.cv_num}', loss, self.epoch
+                f'Loss/{str_tsboard_subgrp} cv_{self.cv_num}', loss, self.epoch
             )
             self.writer.add_scalar(
-                f'Accuracy/{str_tsboard_subgrp}_cv_{self.cv_num}', accuracy, self.epoch
+                f'Accuracy/{str_tsboard_subgrp} cv_{self.cv_num}', accuracy, self.epoch
             )
 
         self.list_train_acc.append(accuracy)
@@ -264,10 +264,10 @@ class ChurnPrediction:
 
             if self.is_log_in_tsboard:
                 self.writer.add_scalar(
-                    f'Loss/{str_tsboard_subgrp}_cv_{self.cv_num}', valid_loss, self.epoch
+                    f'Loss/{str_tsboard_subgrp} cv_{self.cv_num}', valid_loss, self.epoch
                 )
                 self.writer.add_scalar(
-                    f'Accuracy/{str_tsboard_subgrp}_cv_{self.cv_num}', valid_accuracy, self.epoch
+                    f'Accuracy/{str_tsboard_subgrp} cv_{self.cv_num}', valid_accuracy, self.epoch
                 )
 
             self.list_valid_acc.append(valid_accuracy)
@@ -295,7 +295,7 @@ class ChurnPrediction:
             self.patience = patience
 
              # TODO set cv_iterator as parmameter
-            cv_iterator = StratifiedKFold(n_splits=3)
+            cv_iterator = StratifiedKFold(n_splits=4)
             # reset cv number
             self.cv_num = 1
             
