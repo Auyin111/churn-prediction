@@ -8,14 +8,15 @@ After testing different kind of parameters such as optimizer, dataloader, loss f
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve.png" width="80%" height="80%"> <br>
 
 Compare the training and validation curve in tensorboard, I found that the ***best model*** performance ***(loss and accuracy)*** of training and validation are very close to each other <br>
-It should be cause by lack of enough training data or the current features are not enough to predict the result. <br>
+Hence, the model almost learned all the thing from training set so we do not need to further tune the model. <br>
 
-Then, using the best model to create the ***test set*** classification report<br>
+Then, I used the best model to create the ***test set*** classification report<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set.png" width="50%" height="50%"> <br>
-The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not perform well <br><br>
+The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not perform well <br>
 
 Finally, I created the ***train set*** classification report and compare to the ***test set*** classification report <br>
 As the performance are very similar, it can prove that the bad recall of 'Exited' is not caused by Overfitting and it should be caused by Underfitting. <br>
+The Underfitting should be cause by lack of enough training data or the current features are not enough to predict the result. <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__train_set.png" width="50%" height="50%"> <br>
 
 Also, the number of 'Exit' data is very small <br>
