@@ -15,9 +15,9 @@ Then, I used the best model to create the ***test set*** classification report<b
 The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not perform well <br>
 
 Finally, I created the ***train set*** classification report and compare to the ***test set*** classification report <br>
-As the performance are very similar, it can prove that the bad recall of 'Exited' is not caused by Overfitting and it should be caused by Underfitting. <br>
-The Underfitting should be cause by lack of enough training data or the current features are not enough to predict the result. <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__train_set.png" width="50%" height="50%"> <br>
+As the cross validation result and performance of classification report are very similar, it can prove that the bad recall of 'Exited' is not caused by Overfitting and it should be caused by Underfitting. <br>
+The Underfitting should be cause by lack of enough training data or the current features are not enough to predict the result. <br>
 
 Also, the number of 'Exit' data is very small <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/dataset_detail.png" width="50%" height="50%"> <br>
