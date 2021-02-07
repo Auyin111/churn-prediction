@@ -371,29 +371,29 @@ class ChurnPrediction:
         self.best_parmas_to_test_model = \
         df_best_cv_performance[['lr', 'batch_size', 'class_weight']].to_dict('records')[0]
 
-    def __preprocess_validation_performance(self):
-
-        list_parmas_desc = []
-        list_best_valid_loss = []
-
-        for model in self.list_cv_best_model:
-            list_parmas_desc.append(model.parmas_desc)
-            list_best_valid_loss.append(model.best_valid_loss)
-
-        df_best_valid_loss = pd.DataFrame({'parmas_desc': list_parmas_desc,
-                                           'best_valid_loss': list_best_valid_loss})
-
-        self.df_validation_performance = pd.merge(self.__df_all_combinations, df_best_valid_loss,
-                                                  left_index=True, right_index=True).sort_values('best_valid_loss')
-
-    def __find_best_model_and_parmas(self):
-
-        # find the best model
-        for model in self.list_cv_best_model:
-            if model.parmas_desc == self.df_validation_performance.loc[0, 'parmas_desc']:
-                self.best_model = model
-        # find the best parmas
-        self.best_parmas_to_test_model = self.df_validation_performance.head(1)[['lr', 'batch_size', 'class_weight']].to_dict('records')[0]
+    # def __preprocess_validation_performance(self):
+    #
+    #     list_parmas_desc = []
+    #     list_best_valid_loss = []
+    #
+    #     for model in self.list_cv_best_model:
+    #         list_parmas_desc.append(model.parmas_desc)
+    #         list_best_valid_loss.append(model.best_valid_loss)
+    #
+    #     df_best_valid_loss = pd.DataFrame({'parmas_desc': list_parmas_desc,
+    #                                        'best_valid_loss': list_best_valid_loss})
+    #
+    #     self.df_validation_performance = pd.merge(self.__df_all_combinations, df_best_valid_loss,
+    #                                               left_index=True, right_index=True).sort_values('best_valid_loss')
+    #
+    # def __find_best_model_and_parmas(self):
+    #
+    #     # find the best model
+    #     for model in self.list_cv_best_model:
+    #         if model.parmas_desc == self.df_validation_performance.loc[0, 'parmas_desc']:
+    #             self.best_model = model
+    #     # find the best parmas
+    #     self.best_parmas_to_test_model = self.df_validation_performance.head(1)[['lr', 'batch_size', 'class_weight']].to_dict('records')[0]
 
     def test_model(self, dataset):
 

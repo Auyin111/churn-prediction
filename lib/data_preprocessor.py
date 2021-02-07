@@ -130,8 +130,6 @@ class NNDataPreprocess:
             set_ts_output_valid,
         ), batch_size=batch_size, shuffle=shuffle)
 
-
-
     @staticmethod
     def __convert_df_to_ts(df_targeted, dtype):
         return torch.tensor(df_targeted.values, dtype=dtype)
