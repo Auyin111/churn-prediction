@@ -3,8 +3,10 @@ import torch.nn as nn
 import datetime
 import sklearn.metrics as metrics
 import pandas as pd
+import numpy as np
 import itertools
 
+from typing import List, Dict, TypeVar, Union
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.model_selection import StratifiedKFold
 
@@ -12,6 +14,9 @@ from lib.data_preprocessor import NNDataPreprocess
 from lib.model import NNModel
 from lib.early_stopping import EarlyStopping
 from lib.chart_visualizer import ChartVisualizer
+
+model = TypeVar(torch.nn.modules.module.Module)
+
 
 
 class ChurnPrediction:
@@ -41,13 +46,16 @@ class ChurnPrediction:
         self.dropout_percent = None
 
         # _______other variable_______
+        self.cv_num = None
+        self.df_best_model_cv_perf = None
+
         self.best_model = None
-        self.best_parmas_to_test_model = None
+        self.dict_best_parmas_to_test_model = None
         self.nn_model = None
-        self.dict_cv_best_model = {}
+        # remark: first int: model_index, second int: cv_index (cv_num - 1), model: model, float: cv_loss
+        self.dict_cv_best_model: Dict[int, Dict[int, Union[model, float]]] = {}
 
         self.num_max_epochs = None
-        self.patience = None
         self.early_stopping = None
 
         self.is_log_in_tsboard = None
@@ -84,7 +92,7 @@ class ChurnPrediction:
 
             # model_parmas
             dropout_percent=[0.4],
-            list_layers_input_size=[[200, 100, 50], [50, 20]]
+            list_layers_input_size=[[200, 100, 50], [30, 10]]
         )
 
         self.list_all_combinations = list(self.product_dict(**parameters))
@@ -140,6 +148,7 @@ class ChurnPrediction:
         self.shuffle = dict_parmas['shuffle']
 
     def __load_parmas(self, is_train_model):
+        """load parmas in model, optimizer and loss function but except dataloader"""
 
         if is_train_model:
 
@@ -153,9 +162,6 @@ class ChurnPrediction:
 
         self.loss_function = nn.CrossEntropyLoss(weight=self.class_weight)
 
-        # self._NNDataP._prepare_train_valid_dataloader(batch_size=self.batch_size, shuffle=self.shuffle)
-
-
     def __prepare_parmas_desc(self, is_train_model):
         """mark down the detail time and parmas"""
 
@@ -168,7 +174,9 @@ class ChurnPrediction:
             self.str_parmas_desc += f"_layers_size_[{','.join(str(size) for size in self.list_layers_input_size)}]"
 
         # optimizer_parmas
+        self.str_parmas_desc += f'_opt_{self.optimizer_attr}'
         self.str_parmas_desc += f'_lr_{self.lr}'
+        self.str_parmas_desc += f'_amsgrad_{self.amsgrad}'
 
         # loss_function_parmas
         if self.class_weight is not None:
@@ -278,29 +286,25 @@ class ChurnPrediction:
         self.early_stopping(self.nn_model, valid_loss)
 
     # find the best model by cv
-    def cross_validate(self, num_max_epochs=10, patience=10,
-                                       is_test_model=True, is_log_in_tsboard=True,
-                                       log_dir=None):
+    def cross_validate(self, num_max_epochs=10, patience=10, is_log_in_tsboard=True,
+                       log_dir=None, cv_n_splits=5):
         """is_refit: Refit an estimator using the best found parameters on the whole dataset.
         the best parameters is considered by the best valid loss"""
 
         self.is_log_in_tsboard = is_log_in_tsboard
         self.log_dir = log_dir
-        self.list_model_avg_best_loss = []
-        self.list_best_cv_number_idx = []
-        
+
+        cv_iterator = StratifiedKFold(n_splits=cv_n_splits)
+
         for model_idx, dict_parmas in enumerate(self.list_all_combinations):
 
             self.num_max_epochs = num_max_epochs
-            self.patience = patience
 
-             # TODO set cv_iterator as parmameter
-            cv_iterator = StratifiedKFold(n_splits=4)
             # reset cv number
             self.cv_num = 1
-            
-            list_cv_best_loss = []
-            for train_index, valid_index in cv_iterator.split(self._NNDataP.ts_categ_train, self._NNDataP.ts_output_train):
+
+            for train_index, valid_index in cv_iterator.split(self._NNDataP.ts_categ_train,
+                                                              self._NNDataP.ts_output_train):
 
                 self.__extract_parmas(dict_parmas, is_train_model=True)
                 self.__load_parmas(is_train_model=True)
@@ -316,10 +320,11 @@ class ChurnPrediction:
                 self.list_valid_acc = []
                 self.list_valid_loss = []
 
-                self.__create_tsboard_writer()
+                if self.is_log_in_tsboard:
+                    self.__create_tsboard_writer()
                 self._NNDataP.prepare_cv_dataloader(train_index, valid_index, self.batch_size, self.shuffle)
                 # will refit model, so no need to save checkpoint
-                self.early_stopping = EarlyStopping(patience=self.patience, verbose=self.is_display_detail,
+                self.early_stopping = EarlyStopping(patience=patience, verbose=self.is_display_detail,
                                                     is_save_checkpoint=True)
 
                 for self.epoch in range(1, self.num_max_epochs + 1):
@@ -334,38 +339,53 @@ class ChurnPrediction:
                     if self.is_display_detail or self.is_display_batch_info:
                         print('')
 
-
-                # records the best loss in each of the cv
-                list_cv_best_loss.append(- self.early_stopping.best_score)
                 # load the last checkpoint with the best model
                 self.nn_model.load_state_dict(torch.load('checkpoint.pt'))
-                # backup the best model in each of the cv
-                # self.list_cv_best_model.append(self.nn_model)
+
+                # backup the best model each of the cv and it loss
                 if model_idx not in self.dict_cv_best_model.keys():
                     self.dict_cv_best_model[model_idx] = {}
-                # self.cv_num - 1: cv number index
-                self.dict_cv_best_model[model_idx][self.cv_num - 1] = self.nn_model
+                if (self.cv_num - 1) not in self.dict_cv_best_model[model_idx].keys():
+                    self.dict_cv_best_model[model_idx][self.cv_num - 1] = {}
+
+                # record all the model and it best loss (remark: self.cv_num - 1 = cv number index)
+                self.dict_cv_best_model[model_idx][self.cv_num - 1]['model'] = self.nn_model
+                self.dict_cv_best_model[model_idx][self.cv_num - 1]['cv_loss'] = - self.early_stopping.best_score
 
                 self.cv_num += 1
 
-            self.list_model_avg_best_loss.append(sum(list_cv_best_loss) / len(list_cv_best_loss))
-            self.list_best_cv_number_idx.append(list_cv_best_loss.index(min(list_cv_best_loss)))
-
         print('\nAll model is trained successfully')
+        self.__preprocess_cv_performance()
         self.__find_best_model_and_parma()
+
+    def __preprocess_cv_performance(self):
+        
+        # extract cv loss from dictionary
+        list_list_cv_loss: List[List[float]] = []
+        for model_index, dict_cv_index_model_and_loss in self.dict_cv_best_model.items():
+            list_cv_loss = []
+            for cv_index, dict_model_and_loss in dict_cv_index_model_and_loss.items():
+                list_cv_loss.append(dict_model_and_loss['cv_loss'])
+            list_list_cv_loss.append(list_cv_loss)
+
+        df_cv_performance = self.__df_all_combinations.copy()
+
+        df_cv_performance['list_cv_loss'] = list_list_cv_loss
+        df_cv_performance['list_mean_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.mean(x))
+        df_cv_performance['list_std_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.std(x))
+        # use to find the best parameter and the best cv number
+        df_cv_performance['model_index'] = [model_index for model_index in range(len(df_cv_performance))]
+        df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_loss'].apply(lambda x: x.index(min(x)))
+        
+        self.df_cv_performance = df_cv_performance.sort_values('list_mean_cv_loss')
 
     def __find_best_model_and_parma(self):
 
-        self.df_cv_performance = self.__df_all_combinations.copy()
-        self.df_cv_performance['model_best_avg_loss'] = self.list_model_avg_best_loss
+        df_best_model_cv_perf = self.df_cv_performance.head(1)
 
-        # assign model number in df
-        self.df_cv_performance['model_idx'] = [idx for idx in range(len(self.__df_all_combinations))]
-        self.df_cv_performance['best_cv_number_idx'] = self.list_best_cv_number_idx
-
-        df_best_cv_performance = self.df_cv_performance.sort_values('model_best_avg_loss').head(1)
-        model_idx = df_best_cv_performance.model_idx.max()
-        best_cv_number_idx = df_best_cv_performance.best_cv_number_idx.max()
+        best_model_index = df_best_model_cv_perf.model_index.values[0]
+        best_cv_index = df_best_model_cv_perf.best_cv_index.values[0]
+        self.best_model = self.dict_cv_best_model[best_model_index][best_cv_index]['model']
 
         self.best_model = self.dict_cv_best_model[model_idx][best_cv_number_idx]
         self.best_parmas_to_test_model = \
@@ -403,6 +423,7 @@ class ChurnPrediction:
             self.ts_test_pred_label = torch.empty(0)
             self.ts_test_label = torch.empty(0)
         elif dataset == 'train_set':
+            self._NNDataP._prepare_train_dataloader(batch_size=self.batch_size, shuffle=self.shuffle)
             dataloader = self._NNDataP.train_loader
             self.ts_train_pred_label = torch.empty(0)
             self.ts_train_label = torch.empty(0)
@@ -411,7 +432,7 @@ class ChurnPrediction:
             raise AttributeError("object has no attribute 'best_model'" +
                                  '\nyou need to train a model or load a model')
 
-        self.__extract_parmas(self.best_parmas_to_test_model, is_train_model=False)
+        self.__extract_parmas(self.dict_best_parmas_to_test_model, is_train_model=False)
         self.__load_parmas(is_train_model=False)
 
         self.__prepare_parmas_desc(is_train_model=False)

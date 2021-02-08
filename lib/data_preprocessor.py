@@ -32,6 +32,7 @@ class ChurnPredictionDataset(Dataset):
 
         return _ts_x_categ, _ts_x_numer, _ts_y
 
+
 class NNDataPreprocess:
 
     def __init__(self, df_all_data, test_fraction=0.2, valid_fraction=0.2):
@@ -44,6 +45,16 @@ class NNDataPreprocess:
         self.__get_embedding_sizes()
 
         self.__train_test_split()
+
+        # __________init variable__________
+        self._set_ts_categ_train = None
+        self._set_ts_categ_valid = None
+
+        self._set_ts_numer_train = None
+        self._set_ts_numer_valid = None
+
+        self._set_ts_output_train = None
+        self._set_ts_output_valid = None
 
     def __declare_interested_col_type(self):
         """only consider the interested col in the function
@@ -76,15 +87,6 @@ class NNDataPreprocess:
 
         return list_added_col
 
-    def _prepare_test_dataloader(self, batch_size):
-
-        # use to test model
-        self.test_loader = DataLoader(ChurnPredictionDataset(
-            self.ts_categ_test,
-            self.ts_numer_test,
-            self.ts_output_test,
-        ), batch_size=batch_size)
-
     def __train_test_split(self, test_size=0.2, random_state=42, is_stratify=True):
         """is_stratify do not accept bool"""
 
@@ -109,26 +111,42 @@ class NNDataPreprocess:
     def prepare_cv_dataloader(self, train_index, valid_index, batch_size, shuffle):
 
         # train set --> split to train and validation set
-        set_ts_categ_train = Subset(self.ts_categ_train, train_index)
-        set_ts_categ_valid = Subset(self.ts_categ_train, valid_index)
+        self._set_ts_categ_train = Subset(self.ts_categ_train, train_index)
+        self._set_ts_categ_valid = Subset(self.ts_categ_train, valid_index)
 
-        set_ts_numer_train = Subset(self.ts_numer_train, train_index)
-        set_ts_numer_valid = Subset(self.ts_numer_train, valid_index)
+        self._set_ts_numer_train = Subset(self.ts_numer_train, train_index)
+        self._set_ts_numer_valid = Subset(self.ts_numer_train, valid_index)
 
-        self.set_ts_output_train = Subset(self.ts_output_train, train_index)
-        set_ts_output_valid = Subset(self.ts_output_train, valid_index)
+        self._set_ts_output_train = Subset(self.ts_output_train, train_index)
+        self._set_ts_output_valid = Subset(self.ts_output_train, valid_index)
+
+        self._prepare_train_dataloader(batch_size, shuffle)
+        self._prepare_valid_dataloader(batch_size, shuffle)
+        
+    def _prepare_train_dataloader(self, batch_size, shuffle):
 
         self.train_loader = DataLoader(ChurnPredictionDataset(
-            set_ts_categ_train,
-            set_ts_numer_train,
-            self.set_ts_output_train,
+            self._set_ts_categ_train,
+            self._set_ts_numer_train,
+            self._set_ts_output_train,
         ), batch_size=batch_size, shuffle=shuffle)
+        
+    def _prepare_valid_dataloader(self, batch_size, shuffle):
 
         self.valid_loader = DataLoader(ChurnPredictionDataset(
-            set_ts_categ_valid,
-            set_ts_numer_valid,
-            set_ts_output_valid,
+            self._set_ts_categ_valid,
+            self._set_ts_numer_valid,
+            self._set_ts_output_valid,
         ), batch_size=batch_size, shuffle=shuffle)
+        
+    def _prepare_test_dataloader(self, batch_size):
+
+        # use to test model
+        self.test_loader = DataLoader(ChurnPredictionDataset(
+            self.ts_categ_test,
+            self.ts_numer_test,
+            self.ts_output_test,
+        ), batch_size=batch_size)
 
     @staticmethod
     def __convert_df_to_ts(df_targeted, dtype):
