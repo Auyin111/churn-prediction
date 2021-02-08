@@ -4,8 +4,10 @@ Then, we can develop proper strategy to re-engage them before it is too late <br
 
 ## Performance and further improvement
 After testing different kind of parameters such as optimizer, dataloader, loss function, model and model structure. The best model is found by comparing best ***average*** cross validation loss<br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve.png" width="80%" height="80%"> <br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve.png" width="80%" height="80%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_2.png" width="70%" height="70%"> <br><br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_2.png" width="70%" height="70%"> <br>
 
 Compare the training and validation curve in tensorboard, I found that the ***best model*** performance ***(loss and accuracy)*** of training and validation are very close to each other <br>
 Hence, the model almost learned all the thing from training set so we do not need to further tune the model. <br>

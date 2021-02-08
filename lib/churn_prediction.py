@@ -18,7 +18,6 @@ from lib.chart_visualizer import ChartVisualizer
 model = TypeVar(torch.nn.modules.module.Module)
 
 
-
 class ChurnPrediction:
 
     def __init__(self, df_all_data, is_display_detail=True, is_display_batch_info=False,):
@@ -35,7 +34,9 @@ class ChurnPrediction:
 
         # _______all tuning parmas_______
         # optimizer_parmas
+        self.amsgrad = None
         self.lr = None
+        self.optimizer_attr = None
         # loss_function_parmas
         self.class_weight = None
         # dataloader_parmas
@@ -49,11 +50,11 @@ class ChurnPrediction:
         self.cv_num = None
         self.df_best_model_cv_perf = None
 
+        self.nn_model = None
         self.best_model = None
         self.dict_best_parmas_to_test_model = None
-        self.nn_model = None
         # remark: first int: model_index, second int: cv_index (cv_num - 1), model: model, float: cv_loss
-        self.dict_cv_best_model: Dict[int, Dict[int, Union[model, float]]] = {}
+        self.dict_cv_model_and_loss: Dict[int, Dict[int, Union[model, float]]] = {}
 
         self.num_max_epochs = None
         self.early_stopping = None
@@ -76,12 +77,15 @@ class ChurnPrediction:
 
         return print(self.nn_model)
 
+    # TODO able to tune more paras
     def __declare_tuning_parmas(self):
 
         parameters = dict(
 
             # optimizer_parmas
-            lr=[.02, 0.1],
+            optimizer_attr=['Adam', 'AdamW'],
+            lr=[0.02],
+            amsgrad=[False, True],
 
             # dataloader_parmas
             batch_size=[1000],
@@ -140,7 +144,10 @@ class ChurnPrediction:
             dict_parmas['shuffle'] = False
 
         # optimizer_parmas
+        self.optimizer_attr = dict_parmas['optimizer_attr']
         self.lr = dict_parmas['lr']
+        self.amsgrad = dict_parmas['amsgrad']
+
         # loss_function_parmas
         self.class_weight = dict_parmas['class_weight']
         # dataloader_parmas
@@ -158,7 +165,8 @@ class ChurnPrediction:
                                     list_layers_input_size=self.list_layers_input_size,
                                     dropout_percent=self.dropout_percent)
 
-        self.optimizer = torch.optim.Adam(self.nn_model.parameters(), lr=self.lr)
+        optimizer = getattr(torch.optim, self.optimizer_attr)
+        self.optimizer = optimizer(self.nn_model.parameters(), lr=self.lr, amsgrad=self.amsgrad)
 
         self.loss_function = nn.CrossEntropyLoss(weight=self.class_weight)
 
@@ -343,14 +351,14 @@ class ChurnPrediction:
                 self.nn_model.load_state_dict(torch.load('checkpoint.pt'))
 
                 # backup the best model each of the cv and it loss
-                if model_idx not in self.dict_cv_best_model.keys():
-                    self.dict_cv_best_model[model_idx] = {}
-                if (self.cv_num - 1) not in self.dict_cv_best_model[model_idx].keys():
-                    self.dict_cv_best_model[model_idx][self.cv_num - 1] = {}
+                if model_idx not in self.dict_cv_model_and_loss.keys():
+                    self.dict_cv_model_and_loss[model_idx] = {}
+                if (self.cv_num - 1) not in self.dict_cv_model_and_loss[model_idx].keys():
+                    self.dict_cv_model_and_loss[model_idx][self.cv_num - 1] = {}
 
                 # record all the model and it best loss (remark: self.cv_num - 1 = cv number index)
-                self.dict_cv_best_model[model_idx][self.cv_num - 1]['model'] = self.nn_model
-                self.dict_cv_best_model[model_idx][self.cv_num - 1]['cv_loss'] = - self.early_stopping.best_score
+                self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['model'] = self.nn_model
+                self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_loss'] = - self.early_stopping.best_score
 
                 self.cv_num += 1
 
@@ -362,7 +370,7 @@ class ChurnPrediction:
         
         # extract cv loss from dictionary
         list_list_cv_loss: List[List[float]] = []
-        for model_index, dict_cv_index_model_and_loss in self.dict_cv_best_model.items():
+        for model_index, dict_cv_index_model_and_loss in self.dict_cv_model_and_loss.items():
             list_cv_loss = []
             for cv_index, dict_model_and_loss in dict_cv_index_model_and_loss.items():
                 list_cv_loss.append(dict_model_and_loss['cv_loss'])
@@ -385,35 +393,12 @@ class ChurnPrediction:
 
         best_model_index = df_best_model_cv_perf.model_index.values[0]
         best_cv_index = df_best_model_cv_perf.best_cv_index.values[0]
-        self.best_model = self.dict_cv_best_model[best_model_index][best_cv_index]['model']
+        self.best_model = self.dict_cv_model_and_loss[best_model_index][best_cv_index]['model']
 
-        self.best_model = self.dict_cv_best_model[model_idx][best_cv_number_idx]
-        self.best_parmas_to_test_model = \
-        df_best_cv_performance[['lr', 'batch_size', 'class_weight']].to_dict('records')[0]
-
-    # def __preprocess_validation_performance(self):
-    #
-    #     list_parmas_desc = []
-    #     list_best_valid_loss = []
-    #
-    #     for model in self.list_cv_best_model:
-    #         list_parmas_desc.append(model.parmas_desc)
-    #         list_best_valid_loss.append(model.best_valid_loss)
-    #
-    #     df_best_valid_loss = pd.DataFrame({'parmas_desc': list_parmas_desc,
-    #                                        'best_valid_loss': list_best_valid_loss})
-    #
-    #     self.df_validation_performance = pd.merge(self.__df_all_combinations, df_best_valid_loss,
-    #                                               left_index=True, right_index=True).sort_values('best_valid_loss')
-    #
-    # def __find_best_model_and_parmas(self):
-    #
-    #     # find the best model
-    #     for model in self.list_cv_best_model:
-    #         if model.parmas_desc == self.df_validation_performance.loc[0, 'parmas_desc']:
-    #             self.best_model = model
-    #     # find the best parmas
-    #     self.best_parmas_to_test_model = self.df_validation_performance.head(1)[['lr', 'batch_size', 'class_weight']].to_dict('records')[0]
+        # find the best parmas (shuffle, dropout_percent and list_layers_input_size are not required)
+        self.dict_best_parmas_to_test_model = \
+            df_best_model_cv_perf[['optimizer_attr', 'lr', 'amsgrad',
+                                   'batch_size', 'class_weight']].to_dict('records')[0]
 
     def test_model(self, dataset):
 
@@ -490,4 +475,4 @@ class ChurnPrediction:
             y = self.ts_train_pred_label
 
         return pd.DataFrame(metrics.classification_report(
-            x, y, output_dict=True)).T
+            x, y, output_dict=True, target_names=['Not exited', 'Exited'])).T
