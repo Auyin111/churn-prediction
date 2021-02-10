@@ -14,6 +14,7 @@ from lib.data_preprocessor import NNDataPreprocess
 from lib.model import NNModel
 from lib.early_stopping import EarlyStopping
 from lib.chart_visualizer import ChartVisualizer
+from lib.parameter_selector import ParmasSelector
 
 model = TypeVar(torch.nn.modules.module.Module)
 
@@ -27,6 +28,7 @@ class ChurnPrediction:
 
         self._NNDataP = NNDataPreprocess(df_all_data, test_fraction=0.2)
         self._chart_visual = ChartVisualizer()
+        self._parmas_selector = ParmasSelector()
 
         # init variable
         self.__df_all_combinations = None
@@ -56,6 +58,8 @@ class ChurnPrediction:
         self.dict_best_parmas_to_test_model = None
         # remark: first int: model_index, second int: cv_index (cv_num - 1), model: model, float: cv_loss
         self.dict_cv_model_and_loss: Dict[int, Dict[int, Union[model, float]]] = {}
+
+        self.parameters = None
 
         self.num_max_epochs = None
         self.early_stopping = None
@@ -157,9 +161,11 @@ class ChurnPrediction:
             self.list_layers_input_size = dict_parmas['list_layers_input_size']
             self.dropout_percent = dict_parmas['dropout_percent']
 
-        elif not is_train_model:
-            # test data not need to shuffle
-            dict_parmas['shuffle'] = False
+            # oversampling weight
+            self.oversampling_w = dict_parmas['oversampling_w']
+
+            # dataloader_parmas
+            self.shuffle = dict_parmas['shuffle']
 
         # optimizer_parmas
         self.optimizer_attr = dict_parmas['optimizer_attr']
@@ -171,7 +177,6 @@ class ChurnPrediction:
 
         # dataloader_parmas
         self.batch_size = dict_parmas['batch_size']
-        self.shuffle = dict_parmas['shuffle']
 
     def __load_parmas(self, is_train_model):
         """load parmas in model, optimizer and loss function
@@ -217,6 +222,9 @@ class ChurnPrediction:
         # dataloader_parmas
         self.str_parmas_desc += f'_bs_{self.batch_size}'
         self.str_parmas_desc += f'_shuffle_{self.shuffle}'
+
+        # oversampling_weight
+        self.str_parmas_desc += f'_os_w_{self.oversampling_w}'
 
     def __create_tsboard_writer(self):
 
@@ -353,7 +361,9 @@ class ChurnPrediction:
 
                 if self.is_log_in_tsboard:
                     self.__create_tsboard_writer()
-                self._NNDataP.prepare_cv_dataloader(train_index, valid_index, self.batch_size, self.shuffle)
+                self._NNDataP.prepare_cv_dataloader(train_index, valid_index,
+                                                    self.batch_size, self.shuffle,
+                                                    self.oversampling_w)
                 # will refit model, so no need to save checkpoint
                 self.early_stopping = EarlyStopping(patience=patience, verbose=self.is_display_detail,
                                                     is_save_checkpoint=True)
@@ -384,6 +394,8 @@ class ChurnPrediction:
                 self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_loss'] = - self.early_stopping.best_score
 
                 self.cv_num += 1
+
+                print('')
 
         print('\nAll model is trained successfully')
         self.__preprocess_cv_performance()
@@ -445,11 +457,6 @@ class ChurnPrediction:
         if not hasattr(self, 'best_model'):
             raise AttributeError("object has no attribute 'best_model'" +
                                  '\nyou need to train a model or load a model')
-
-        self.__extract_parmas(self.dict_best_parmas_to_test_model, is_train_model=False)
-        self.__load_parmas(is_train_model=False)
-
-        self.__prepare_parmas_desc(is_train_model=False)
 
         self.list_test_acc = []
         self.list_test_loss = []
