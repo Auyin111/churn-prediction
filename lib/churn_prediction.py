@@ -28,7 +28,8 @@ class ChurnPrediction:
         self._NNDataP = NNDataPreprocess(df_all_data, test_fraction=0.2)
         self._chart_visual = ChartVisualizer()
 
-        self.__declare_tuning_parmas()
+        # init variable
+        self.__df_all_combinations = None
 
         # __________init variable__________
 
@@ -73,44 +74,23 @@ class ChurnPrediction:
 
         print("ChurnPrediction object created")
 
-    def preview_model(self):
+    # _______show and edit parmas setting_______
 
-        return print(self.nn_model)
+    def select_parmas(self, str_selection):
 
-    # TODO able to tune more paras
-    def __declare_tuning_parmas(self):
+        self.parameters = self._parmas_selector.select(str_selection)
+        self.__prepare_tuning_combination()
 
-        parameters = dict(
+    def show_available_parmas_options(self):
 
-            # optimizer_parmas
-            optimizer_attr=['Adam', 'AdamW'],
-            lr=[0.02],
-            amsgrad=[False, True],
+        print(self._parmas_selector.show_available_parmas_options())
 
-            # dataloader_parmas
-            batch_size=[1000],
-            shuffle=[True, False],
+    def __prepare_tuning_combination(self):
 
-            # loss_function_parmas
-            class_weight=[None, torch.tensor([0.8, 1])],
-
-            # model_parmas
-            dropout_percent=[0.4],
-            list_layers_input_size=[[200, 100, 50], [30, 10]]
-        )
-
-        self.list_all_combinations = list(self.product_dict(**parameters))
+        self.list_all_combinations = list(self.product_dict(**self.parameters))
         self.__df_all_combinations = pd.DataFrame(self.list_all_combinations)
-
-    def show_label_distribution(self):
-
-        df_label_pie_chart = self._NNDataP._prepare_plot_pie_ftr_distribution()
-        self._chart_visual.plot_pie_label_distribution(df_label_pie_chart,
-                                                       'counts', 'status', 'Exited and not Exited distribution')
-
-    def show_tuning_combinations(self):
-
-        print(f'num of combination: {len(self.__df_all_combinations)}')
+        self.drop_parmas_combinations()
+        print(f'number of combinations: {len(self.__df_all_combinations)}')
         display(self.__df_all_combinations)
 
     @staticmethod
@@ -131,6 +111,44 @@ class ChurnPrediction:
         for instance in itertools.product(*vals):
             yield dict(zip(keys, instance))
 
+    def drop_parmas_combinations(self):
+        """drop unacceptable and useless parameter combination"""
+
+        len_df_org = len(self.__df_all_combinations)
+
+        # necessary
+        # ValueError: sampler option is mutually exclusive with shuffle
+        self.__df_all_combinations = self.__df_all_combinations[~(self.__df_all_combinations.shuffle &
+                                                                ~(self.__df_all_combinations.oversampling_w.isnull())
+                                                                  )]
+        # TODO some optimizer can not use parameter
+        pass
+
+        # optional
+        # TODO some combination is not good
+
+        if len_df_org != len(self.__df_all_combinations):
+            print(f'{len_df_org - len(self.__df_all_combinations)} combinations is dropped')
+
+    # _______visualize setting and performance_______
+
+    def preview_model(self):
+
+        return print(self.nn_model)
+
+    def show_label_distribution(self):
+
+        df_label_pie_chart = self._NNDataP._prepare_plot_pie_ftr_distribution()
+        self._chart_visual.plot_pie_label_distribution(df_label_pie_chart,
+                                                       'counts', 'status', 'Exited and not Exited distribution')
+
+    def show_tuning_combinations(self):
+
+        print(f'num of combination: {len(self.__df_all_combinations)}')
+        display(self.__df_all_combinations)
+
+    # _______extract and load parmas_______
+
     def __extract_parmas(self, dict_parmas, is_train_model):
 
         if is_train_model:
@@ -150,12 +168,14 @@ class ChurnPrediction:
 
         # loss_function_parmas
         self.class_weight = dict_parmas['class_weight']
+
         # dataloader_parmas
         self.batch_size = dict_parmas['batch_size']
         self.shuffle = dict_parmas['shuffle']
 
     def __load_parmas(self, is_train_model):
-        """load parmas in model, optimizer and loss function but except dataloader"""
+        """load parmas in model, optimizer and loss function
+         but not need to load parmas in dataloader and oversampling setting"""
 
         if is_train_model:
 
@@ -170,6 +190,8 @@ class ChurnPrediction:
 
         self.loss_function = nn.CrossEntropyLoss(weight=self.class_weight)
 
+    # _______logging_______
+
     def __prepare_parmas_desc(self, is_train_model):
         """mark down the detail time and parmas"""
 
@@ -177,9 +199,9 @@ class ChurnPrediction:
 
         if is_train_model:
             # model_parmas
-            self.str_parmas_desc += f'_dropout_p_{self.dropout_percent}'
+            self.str_parmas_desc += f'_do_p_{self.dropout_percent}'
             # [1,2,3,4] --> '[1,2,3,4]'
-            self.str_parmas_desc += f"_layers_size_[{','.join(str(size) for size in self.list_layers_input_size)}]"
+            self.str_parmas_desc += f"_ly_s_[{self.list_layers_input_size}]"
 
         # optimizer_parmas
         self.str_parmas_desc += f'_opt_{self.optimizer_attr}'
@@ -304,7 +326,7 @@ class ChurnPrediction:
 
         cv_iterator = StratifiedKFold(n_splits=cv_n_splits)
 
-        for model_idx, dict_parmas in enumerate(self.list_all_combinations):
+        for model_idx, row in self.__df_all_combinations.iterrows():
 
             self.num_max_epochs = num_max_epochs
 
@@ -382,8 +404,9 @@ class ChurnPrediction:
         df_cv_performance['list_cv_loss'] = list_list_cv_loss
         df_cv_performance['list_mean_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.mean(x))
         df_cv_performance['list_std_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.std(x))
-        # use to find the best parameter and the best cv number
-        df_cv_performance['model_index'] = [model_index for model_index in range(len(df_cv_performance))]
+        # 'model_index' is used to find the best parameter and the best cv number
+        # the order of df_cv_performance is equal to dict_cv_model_and_loss are some
+        df_cv_performance['model_index'] = [model_index for model_index in self.dict_cv_model_and_loss.keys()]
         df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_loss'].apply(lambda x: x.index(min(x)))
         
         self.df_cv_performance = df_cv_performance.sort_values('list_mean_cv_loss')
@@ -396,12 +419,17 @@ class ChurnPrediction:
         best_cv_index = df_best_model_cv_perf.best_cv_index.values[0]
         self.best_model = self.dict_cv_model_and_loss[best_model_index][best_cv_index]['model']
 
-        # find the best parmas (shuffle, dropout_percent and list_layers_input_size are not required)
+        # find the best parmas (some parmas are not required to test model performance)
+        list_parmas_not_for_test_model = ['shuffle', 'dropout_percent', 'list_layers_input_size', 'oversampling_w']
+        list_parmas_to_test_model = list(set(df_best_model_cv_perf.columns) - set(list_parmas_not_for_test_model))
+
         self.dict_best_parmas_to_test_model = \
-            df_best_model_cv_perf[['optimizer_attr', 'lr', 'amsgrad',
-                                   'batch_size', 'class_weight']].to_dict('records')[0]
+            df_best_model_cv_perf[list_parmas_to_test_model].to_dict('records')[0]
 
     def test_model(self, dataset):
+
+        self.__extract_parmas(self.dict_best_parmas_to_test_model, is_train_model=False)
+        self.__load_parmas(is_train_model=False)
 
         if dataset == 'test_set':
             self._NNDataP._prepare_test_dataloader(batch_size=self.batch_size)
