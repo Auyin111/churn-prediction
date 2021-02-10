@@ -311,11 +311,12 @@ class ChurnPrediction:
             # reset cv number
             self.cv_num = 1
 
-            for train_index, valid_index in cv_iterator.split(self._NNDataP.ts_categ_train,
-                                                              self._NNDataP.ts_output_train):
+            dict_parmas = dict(row)
+            self.__extract_parmas(dict_parmas, is_train_model=True)
+            self.__load_parmas(is_train_model=True)
 
-                self.__extract_parmas(dict_parmas, is_train_model=True)
-                self.__load_parmas(is_train_model=True)
+            for train_index, valid_index in cv_iterator.split(self._NNDataP.ts_categ_train_valid,
+                                                              self._NNDataP.ts_output_train_valid):
 
                 self.__prepare_parmas_desc(is_train_model=True)
 
@@ -407,11 +408,11 @@ class ChurnPrediction:
             dataloader = self._NNDataP.test_loader
             self.ts_test_pred_label = torch.empty(0)
             self.ts_test_label = torch.empty(0)
-        elif dataset == 'train_set':
-            self._NNDataP._prepare_train_dataloader(batch_size=self.batch_size, shuffle=self.shuffle)
-            dataloader = self._NNDataP.train_loader
-            self.ts_train_pred_label = torch.empty(0)
-            self.ts_train_label = torch.empty(0)
+        elif dataset == 'train_valid_set':
+            self._NNDataP._prepare_train_valid_dataloader(batch_size=self.batch_size)
+            dataloader = self._NNDataP.train_valid_loader
+            self.ts_train_valid_pred_label = torch.empty(0)
+            self.ts_train_valid_label = torch.empty(0)
 
         if not hasattr(self, 'best_model'):
             raise AttributeError("object has no attribute 'best_model'" +
@@ -444,9 +445,9 @@ class ChurnPrediction:
                 if dataset == 'test_set':
                     self.ts_test_pred_label = torch.cat((self.ts_test_pred_label, y_pred_label))
                     self.ts_test_label = torch.cat((self.ts_test_label, ts_y))
-                elif dataset == 'train_set':
-                    self.ts_train_pred_label = torch.cat((self.ts_train_pred_label, y_pred_label))
-                    self.ts_train_label = torch.cat((self.ts_train_label, ts_y))
+                elif dataset == 'train_valid_set':
+                    self.ts_train_valid_pred_label = torch.cat((self.ts_train_valid_pred_label, y_pred_label))
+                    self.ts_train_valid_label = torch.cat((self.ts_train_valid_label, ts_y))
 
                 num_correct += torch.sum(y_pred_label == ts_y).item()
                 num_total_test += ts_y.size(0)
@@ -467,12 +468,14 @@ class ChurnPrediction:
             x = self.ts_test_label
             y = self.ts_test_pred_label
 
-        elif dataset == 'train_set':
+        elif dataset == 'train_valid_set':
             if self.ts_test_pred_label is None:
-                raise AttributeError("the attribute 'ts_train_label' is empty" +
-                                     '\nyou need to test model by train_set before visualize data')
-            x = self.ts_train_label
-            y = self.ts_train_pred_label
+                raise AttributeError("the attribute 'ts_train_valid_label' is empty" +
+                                     '\nyou need to test model by train_valid_set before visualize data')
+            x = self.ts_train_valid_label
+            y = self.ts_train_valid_pred_label
 
         return pd.DataFrame(metrics.classification_report(
             x, y, output_dict=True, target_names=['Not exited', 'Exited'])).T
+
+

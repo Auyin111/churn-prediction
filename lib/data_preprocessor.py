@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
 pd.set_option('mode.chained_assignment', None)
 
 
@@ -47,14 +47,16 @@ class NNDataPreprocess:
         self.__train_test_split()
 
         # __________init variable__________
-        self._set_ts_categ_train = None
-        self._set_ts_categ_valid = None
+        self._subset_ts_categ_train = None
+        self._subset_ts_categ_valid = None
 
-        self._set_ts_numer_train = None
-        self._set_ts_numer_valid = None
+        self._subset_ts_numer_train = None
+        self._subset_ts_numer_valid = None
 
-        self._set_ts_output_train = None
-        self._set_ts_output_valid = None
+        self._subset_ts_output_train = None
+        self._subset_ts_output_valid = None
+
+        self.weighted_sampler = None
 
     def __declare_interested_col_type(self):
         """only consider the interested col in the function
@@ -88,7 +90,7 @@ class NNDataPreprocess:
         return list_added_col
 
     def __train_test_split(self, test_size=0.2, random_state=42, is_stratify=True):
-        """is_stratify do not accept bool"""
+        """is_stratify --> split the train test stratify"""
 
         self.num_test_records = 1000
         self.num_valid_records = 1000
@@ -102,51 +104,88 @@ class NNDataPreprocess:
         # output
         ts_output_data = self.__convert_df_to_ts(self.df_all_data[self.list_col_outputs], None).flatten()
 
-        self.ts_categ_train, self.ts_categ_test, self.ts_numer_train, self.ts_numer_test, \
-        self.ts_output_train, self.ts_output_test = train_test_split(
+        self.ts_categ_train_valid, self.ts_categ_test, self.ts_numer_train_valid, self.ts_numer_test, \
+        self.ts_output_train_valid, self.ts_output_test = train_test_split(
             ts_categ_data, ts_numer_data, ts_output_data, test_size=test_size,
             random_state=random_state,
             stratify=ts_output_data if is_stratify else None)
 
-    def prepare_cv_dataloader(self, train_index, valid_index, batch_size, shuffle):
+    def prepare_cv_dataloader(self, train_index, valid_index,
+                              batch_size, shuffle,
+                              oversampling_w):
 
-        # train set --> split to train and validation set
-        self._set_ts_categ_train = Subset(self.ts_categ_train, train_index)
-        self._set_ts_categ_valid = Subset(self.ts_categ_train, valid_index)
+        # train_valid set --> split to train and validation set
+        self._subset_ts_categ_train = Subset(self.ts_categ_train_valid, train_index)
+        self._subset_ts_categ_valid = Subset(self.ts_categ_train_valid, valid_index)
 
-        self._set_ts_numer_train = Subset(self.ts_numer_train, train_index)
-        self._set_ts_numer_valid = Subset(self.ts_numer_train, valid_index)
+        self._subset_ts_numer_train = Subset(self.ts_numer_train_valid, train_index)
+        self._subset_ts_numer_valid = Subset(self.ts_numer_train_valid, valid_index)
 
-        self._set_ts_output_train = Subset(self.ts_output_train, train_index)
-        self._set_ts_output_valid = Subset(self.ts_output_train, valid_index)
+        self._subset_ts_output_train = Subset(self.ts_output_train_valid, train_index)
+        self._subset_ts_output_valid = Subset(self.ts_output_train_valid, valid_index)
+
+        if oversampling_w is not None:
+            self._create_weighted_train_sampler(oversampling_w=oversampling_w)
+        else:
+            # no weighted
+            self.weighted_sampler = None
 
         self._prepare_train_dataloader(batch_size, shuffle)
         self._prepare_valid_dataloader(batch_size, shuffle)
-        
+
+    # TODO accpet array_weight
+    def _create_weighted_train_sampler(self, oversampling_w):
+
+        if oversampling_w == 'count_balance':
+            array_class_count = np.unique(self._subset_ts_output_train, return_counts=True)[1]
+            array_weight = 1. / array_class_count
+        elif type(oversampling_w) == np.ndarray:
+            array_weight = oversampling_w
+        else:
+            raise Exception(
+                f"The oversamling_w should either be 'count_balance' or an array, but it is {type(oversampling_w)} now")
+
+        array_samples_weight = array_weight[self._subset_ts_output_train]
+        ts_samples_weight = torch.from_numpy(array_samples_weight)
+
+        self.weighted_sampler = WeightedRandomSampler(ts_samples_weight, len(ts_samples_weight))
+
+    def _prepare_train_valid_dataloader(self, batch_size):
+        """use to compare the performance of test_model between train_valid data and test data
+         so shuffle = False and sampler = None"""
+
+        self.train_valid_loader = DataLoader(ChurnPredictionDataset(
+            self.ts_categ_train_valid,
+            self.ts_numer_train_valid,
+            self.ts_output_train_valid,
+        ), batch_size=batch_size, shuffle=False, sampler=None)
+
     def _prepare_train_dataloader(self, batch_size, shuffle):
 
         self.train_loader = DataLoader(ChurnPredictionDataset(
-            self._set_ts_categ_train,
-            self._set_ts_numer_train,
-            self._set_ts_output_train,
-        ), batch_size=batch_size, shuffle=shuffle)
-        
+            self._subset_ts_categ_train,
+            self._subset_ts_numer_train,
+            self._subset_ts_output_train,
+        ), batch_size=batch_size, shuffle=shuffle, sampler=self.weighted_sampler)
+
     def _prepare_valid_dataloader(self, batch_size, shuffle):
 
         self.valid_loader = DataLoader(ChurnPredictionDataset(
-            self._set_ts_categ_valid,
-            self._set_ts_numer_valid,
-            self._set_ts_output_valid,
+            self._subset_ts_categ_valid,
+            self._subset_ts_numer_valid,
+            self._subset_ts_output_valid,
         ), batch_size=batch_size, shuffle=shuffle)
         
     def _prepare_test_dataloader(self, batch_size):
+        """use to compare the performance of test_model between train_valid data and test data
+         so shuffle = False and sampler = None"""
 
         # use to test model
         self.test_loader = DataLoader(ChurnPredictionDataset(
             self.ts_categ_test,
             self.ts_numer_test,
             self.ts_output_test,
-        ), batch_size=batch_size)
+        ), batch_size=batch_size, shuffle=False, sampler=None)
 
     @staticmethod
     def __convert_df_to_ts(df_targeted, dtype):
