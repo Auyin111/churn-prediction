@@ -1,9 +1,9 @@
-## Churn customer prediction
+# Churn customer prediction #
 Using embedding combine the categorical data and numerical data to predict which customers are about to leave your service soon <br>
 Then, we can develop proper strategy to re-engage them before it is too late <br>
 
-## Performance and further improvement
-***Without class weight and oversampling***
+## Performance and further improvement ##
+### Baseline: Without class weight and oversampling ###
 After testing different kind of parameters such as optimizer, dataloader, loss function, model and model structure. The best model is found by comparing ***best average cross validation loss***<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_2.png" width="35%" height="35%"> <br><br>
@@ -25,7 +25,7 @@ As the cross validation result and performance of classification report are very
 The Underfitting should be cause by imbalance dataset, lack of enough training data or the current features are not able to predict the result. <br> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/dataset_detail.png" width="50%" height="50%"> <br>
 
-***Assign class weight and oversampling***
+### Assign class weight and oversampling ###
 Using ***Max. f1 core in stead of Min. loss*** to find the best model <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="100%" height="100%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_2.png" width="50%" height="50%"> <br>
@@ -34,7 +34,7 @@ The recall of 'Exited' is improved but the precision reduce. <br><br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_with_class_weight.png" width="80%" height="80%"> <br>
 37.10% of "Exited" are predicted as "Not exited" (already reduce 19.66%)
 
-***Conclusion***
+### Conclusion ###
 1) A greater number of data should be collected, and more useful features <br>
 2) Use different parameters to tune model
     - model structure, optimizer, batch_size etc.
@@ -43,7 +43,7 @@ The recall of 'Exited' is improved but the precision reduce. <br><br>
     - Low precision of 'Not exited' will increase the promotion cost when we re-engage customer
     - But low recall of 'Exited' will loss the customer
 
-## Model tuning
+## Model tuning ##
 Allow to cross validate different kind of parameters easily in a dictionary, such as optimizer, dataloader, loss function, model and model structure <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/declare_tuning_parmas.png" width="40%" height="40%"> <br>
 
@@ -53,7 +53,7 @@ The cross validation training and validation curve will be stored and display on
 Also, a df will show the CV performance of all parameter’s combinations.
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/cross_validation_performance.png" width="100%" height="100%"> <br>
 
-## Technical term description
+## Technical term description ##
 ***Embeddings*** <br>
 --> reduce the dimensionality of categorical variables and meaningfully represent categories in the transformed space <br>
 
@@ -88,10 +88,10 @@ is a tool for providing the (***instant***) measurements and visualizations need
 As it is a imbalance dataset, using stratified k fold can have a fair validation and testing
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/StratifiedKFold.png" width="40%" height="40%"> <br>
 
-## Open TensorBoard through the command line
+## Open TensorBoard through the command line ##
     tensorboard --logdir= YOUR PATH (Default: runs)
 
-## Churn Modelling Dataset
+## Churn Modelling Dataset ##
 [Kaggle dataset](https://www.kaggle.com/c/churn-modelling)
 
 
