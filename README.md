@@ -81,7 +81,7 @@ is a tool for providing the (***instant***) measurements and visualizations need
 5. Remarks: <br>
     - fp (False positive):  it is negative but predicted as positive <br>
     - fn (False negative):  it is positive but predicted as negative <br>
-    - tp (True positive)
+    - tp (True positive) <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/precision_and_recall.png" width="20%" height="20%"> <br>
 
 ***StratifiedKFold*** <br>
