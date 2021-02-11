@@ -32,12 +32,13 @@ class EarlyStopping:
 
         print("EarlyStopping object created")
 
-    def __call__(self, model, val_loss):
+    def __call__(self, model, val_loss, f1):
 
         score = -val_loss
 
         if self.best_score is None:
             self.best_score = score
+            self.f1 = f1
             if self.is_save_checkpoint:
                 self.save_checkpoint(val_loss, model)
         elif score < self.best_score + self.delta:
@@ -48,6 +49,7 @@ class EarlyStopping:
                 self.early_stop = True
         else:
             self.best_score = score
+            self.f1 = f1
             if self.is_save_checkpoint:
                 self.save_checkpoint(val_loss, model)
             self.counter = 0

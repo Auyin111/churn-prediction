@@ -20,7 +20,7 @@ class ParmasSelector(object):
         return dict(
 
             # optimizer_parmas
-            optimizer_attr=['Adam', 'AdamW'],
+            optimizer_attr=['Adam'],
             lr=[0.02],
             amsgrad=[False],
 
@@ -34,7 +34,7 @@ class ParmasSelector(object):
 
             # model_parmas
             dropout_percent=[0.4],
-            list_layers_input_size=[[200, 100, 50], [30, 10]],
+            list_layers_input_size=[[200, 100, 50]],
 
             # oversampling_weight
             # e.g. 'count_balance' or np.array([x, y])
@@ -57,7 +57,7 @@ class ParmasSelector(object):
 
             # loss_function_parmas
             # e.g. None or torch.tensor([x.0, y.0])
-            class_weight=[torch.tensor([1.0, 5.0])],
+            class_weight=[torch.tensor([1.0, 4.0]), torch.tensor([1.0, 3.0]), torch.tensor([1.0, 2.0])],
 
             # model_parmas
             dropout_percent=[0.4],
@@ -92,5 +92,5 @@ class ParmasSelector(object):
 
             # oversampling_weight
             # e.g. 'count_balance' or np.array([x, y])
-            oversampling_w=[np.array([1, 5])]
+            oversampling_w=[np.array([1, 4]), np.array([1, 3]), np.array([1, 2])]
         )

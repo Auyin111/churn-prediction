@@ -5,15 +5,17 @@ import sklearn.metrics as metrics
 import pandas as pd
 import numpy as np
 import itertools
+import sklearn
 
 from typing import List, Dict, TypeVar, Union
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import confusion_matrix
 
 from lib.data_preprocessor import NNDataPreprocess
 from lib.model import NNModel
 from lib.early_stopping import EarlyStopping
-from lib.chart_visualizer import ChartVisualizer
+from lib.chart_visualizer import ChartVisualizer, make_confusion_matrix
 from lib.parameter_selector import ParmasSelector
 
 model = TypeVar(torch.nn.modules.module.Module)
@@ -67,14 +69,8 @@ class ChurnPrediction:
         self.is_log_in_tsboard = None
         self.log_dir = None
 
-        self.list_train_acc = None
-        self.list_train_loss = None
-        self.list_valid_acc = None
-        self.list_valid_loss = None
-        self.list_test_acc = None
-        self.list_test_loss = None
-
         self.ts_test_pred_label = None
+
 
         print("ChurnPrediction object created")
 
@@ -157,15 +153,15 @@ class ChurnPrediction:
 
         if is_train_model:
 
-            # model_parmas
-            self.list_layers_input_size = dict_parmas['list_layers_input_size']
-            self.dropout_percent = dict_parmas['dropout_percent']
-
             # oversampling weight
             self.oversampling_w = dict_parmas['oversampling_w']
 
             # dataloader_parmas
             self.shuffle = dict_parmas['shuffle']
+
+        # model_parmas
+        self.list_layers_input_size = dict_parmas['list_layers_input_size']
+        self.dropout_percent = dict_parmas['dropout_percent']
 
         # optimizer_parmas
         self.optimizer_attr = dict_parmas['optimizer_attr']
@@ -178,17 +174,16 @@ class ChurnPrediction:
         # dataloader_parmas
         self.batch_size = dict_parmas['batch_size']
 
-    def __load_parmas(self, is_train_model):
-        """load parmas in model, optimizer and loss function
-         but not need to load parmas in dataloader and oversampling setting"""
+    def __build_model(self):
 
-        if is_train_model:
+        self.nn_model = NNModel(embedding_size=self._NNDataP.list_categorical_embed_sizes,
+                                num_numerical_cols=len(self._NNDataP.list_col_numerical),
+                                output_size=2,
+                                list_layers_input_size=self.list_layers_input_size,
+                                dropout_percent=self.dropout_percent)
 
-            self.nn_model = NNModel(embedding_size=self._NNDataP.list_categorical_embed_sizes,
-                                    num_numerical_cols=len(self._NNDataP.list_col_numerical),
-                                    output_size=2,
-                                    list_layers_input_size=self.list_layers_input_size,
-                                    dropout_percent=self.dropout_percent)
+    def __load_lf_and_optim_parmas(self):
+        """load parmas in loss function and optimizer"""
 
         optimizer = getattr(torch.optim, self.optimizer_attr)
         self.optimizer = optimizer(self.nn_model.parameters(), lr=self.lr, amsgrad=self.amsgrad)
@@ -258,16 +253,22 @@ class ChurnPrediction:
             self.optimizer.step()
 
             running_loss += single_loss.item()
-            _, y_pred_label = torch.max(y_pred, dim=1)
-            num_correct += torch.sum(y_pred_label == ts_y).item()
+            _, ts_y_pred = torch.max(y_pred, dim=1)
+            num_correct += torch.sum(ts_y_pred == ts_y).item()
             num_total_train += ts_y.size(0)
             if self.is_display_batch_info:
                 if (batch_idx) % 5 == 0:
                     print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
                           .format(self.epoch, self.num_max_epochs, batch_idx, total_step, single_loss.item()))
 
+            self.ts_train_all_y = torch.cat((self.ts_train_all_y, ts_y), 0)
+            self.ts_train_all_y_pred = torch.cat((self.ts_train_all_y_pred, ts_y_pred), 0)
+
         accuracy = 100 * num_correct / num_total_train
         loss = running_loss / total_step
+        f1 = sklearn.metrics.f1_score(self.ts_train_all_y,
+                                      self.ts_train_all_y_pred, labels=None, pos_label=1, average='macro',
+                                      zero_division='warn')
 
         if self.is_display_detail:
             print(f'Train loss: {loss:.4f}, train acc: {accuracy:.4f}')
@@ -279,9 +280,9 @@ class ChurnPrediction:
             self.writer.add_scalar(
                 f'Accuracy/{str_tsboard_subgrp} cv_{self.cv_num}', accuracy, self.epoch
             )
-
-        self.list_train_acc.append(accuracy)
-        self.list_train_loss.append(loss)
+            self.writer.add_scalar(
+                f'f1/{str_tsboard_subgrp} cv_{self.cv_num}', f1, self.epoch
+            )
 
     def valid_model(self, str_tsboard_subgrp='Validation sets'):
 
@@ -298,12 +299,18 @@ class ChurnPrediction:
                 single_loss = self.loss_function(y_pred, ts_y)
 
                 running_loss += single_loss.item()
-                _, y_pred_label = torch.max(y_pred, dim=1)
-                num_correct += torch.sum(y_pred_label == ts_y).item()
+                _, ts_y_pred = torch.max(y_pred, dim=1)
+                num_correct += torch.sum(ts_y_pred == ts_y).item()
                 num_total_valid += ts_y.size(0)
+
+                self.ts_valid_all_y = torch.cat((self.ts_valid_all_y, ts_y), 0)
+                self.ts_valid_all_y_pred = torch.cat((self.ts_valid_all_y_pred, ts_y_pred), 0)
 
             valid_accuracy = 100 * num_correct / num_total_valid
             valid_loss = running_loss / len(self._NNDataP.valid_loader)
+            f1 = sklearn.metrics.f1_score(self.ts_valid_all_y,
+                                          self.ts_valid_all_y_pred, labels=None, pos_label=1, average='weighted',
+                                          zero_division='warn')
 
             if self.is_display_detail:
                 print(f'Valid loss: {valid_loss:.4f}, valid acc: {valid_accuracy:.4f}')
@@ -315,20 +322,21 @@ class ChurnPrediction:
                 self.writer.add_scalar(
                     f'Accuracy/{str_tsboard_subgrp} cv_{self.cv_num}', valid_accuracy, self.epoch
                 )
-
-            self.list_valid_acc.append(valid_accuracy)
-            self.list_valid_loss.append(valid_loss)
+                self.writer.add_scalar(
+                    f'f1/{str_tsboard_subgrp} cv_{self.cv_num}', f1, self.epoch
+                )
 
         # early_stopping needs the validation loss to check if it has improved,
         # and if it has, it will make a checkpoint of the current model
-        self.early_stopping(self.nn_model, valid_loss)
+        self.early_stopping(self.nn_model, valid_loss, f1)
 
     # find the best model by cv
-    def cross_validate(self, num_max_epochs=10, patience=10, is_log_in_tsboard=True,
+    def cross_validate(self, cv_strategy: str, num_max_epochs=10, patience=10, is_log_in_tsboard=True,
                        log_dir=None, cv_n_splits=5):
         """is_refit: Refit an estimator using the best found parameters on the whole dataset.
         the best parameters is considered by the best valid loss"""
 
+        self.cv_strategy = cv_strategy
         self.is_log_in_tsboard = is_log_in_tsboard
         self.log_dir = log_dir
 
@@ -343,28 +351,27 @@ class ChurnPrediction:
 
             dict_parmas = dict(row)
             self.__extract_parmas(dict_parmas, is_train_model=True)
-            self.__load_parmas(is_train_model=True)
 
             for train_index, valid_index in cv_iterator.split(self._NNDataP.ts_categ_train_valid,
                                                               self._NNDataP.ts_output_train_valid):
 
+                self.__build_model()
+                self.__load_lf_and_optim_parmas()
                 self.__prepare_parmas_desc(is_train_model=True)
 
                 self.nn_model.parmas_desc = self.str_parmas_desc
                 print('train and valid model: ', self.nn_model.parmas_desc)
 
-                # clear previous model records
-                self.list_train_acc = []
-                self.list_train_loss = []
-                self.list_valid_acc = []
-                self.list_valid_loss = []
+                self.ts_train_all_y = torch.empty(0)
+                self.ts_train_all_y_pred = torch.empty(0)
+                self.ts_valid_all_y = torch.empty(0)
+                self.ts_valid_all_y_pred = torch.empty(0)
 
                 if self.is_log_in_tsboard:
                     self.__create_tsboard_writer()
                 self._NNDataP.prepare_cv_dataloader(train_index, valid_index,
                                                     self.batch_size, self.shuffle,
                                                     self.oversampling_w)
-                # will refit model, so no need to save checkpoint
                 self.early_stopping = EarlyStopping(patience=patience, verbose=self.is_display_detail,
                                                     is_save_checkpoint=True)
 
@@ -392,6 +399,7 @@ class ChurnPrediction:
                 # record all the model and it best loss (remark: self.cv_num - 1 = cv number index)
                 self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['model'] = self.nn_model
                 self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_loss'] = - self.early_stopping.best_score
+                self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_f1'] = self.early_stopping.f1
 
                 self.cv_num += 1
 
@@ -403,25 +411,38 @@ class ChurnPrediction:
 
     def __preprocess_cv_performance(self):
         
-        # extract cv loss from dictionary
+        # extract cv loss and f1 from dictionary
         list_list_cv_loss: List[List[float]] = []
+        list_list_cv_f1: List[List[float]] = []
         for model_index, dict_cv_index_model_and_loss in self.dict_cv_model_and_loss.items():
             list_cv_loss = []
+            list_cv_f1 = []
             for cv_index, dict_model_and_loss in dict_cv_index_model_and_loss.items():
                 list_cv_loss.append(dict_model_and_loss['cv_loss'])
+                list_cv_f1.append(dict_model_and_loss['cv_f1'])
             list_list_cv_loss.append(list_cv_loss)
+            list_list_cv_f1.append(list_cv_f1)
 
         df_cv_performance = self.__df_all_combinations.copy()
-
+        # TODO code tidy
         df_cv_performance['list_cv_loss'] = list_list_cv_loss
         df_cv_performance['list_mean_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.mean(x))
         df_cv_performance['list_std_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.std(x))
+
+        df_cv_performance['list_cv_f1'] = list_list_cv_f1
+        df_cv_performance['list_mean_cv_f1'] = df_cv_performance['list_cv_f1'].apply(lambda x: np.mean(x))
+        df_cv_performance['list_std_cv_f1'] = df_cv_performance['list_cv_f1'].apply(lambda x: np.std(x))
+
         # 'model_index' is used to find the best parameter and the best cv number
         # the order of df_cv_performance is equal to dict_cv_model_and_loss are some
         df_cv_performance['model_index'] = [model_index for model_index in self.dict_cv_model_and_loss.keys()]
-        df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_loss'].apply(lambda x: x.index(min(x)))
-        
-        self.df_cv_performance = df_cv_performance.sort_values('list_mean_cv_loss')
+
+        if self.cv_strategy == 'min_loss':
+            df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_loss'].apply(lambda x: x.index(min(x)))
+            self.df_cv_performance = df_cv_performance.sort_values('list_mean_cv_loss')
+        elif self.cv_strategy == 'max_f1':
+            df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_f1'].apply(lambda x: x.index(max(x)))
+            self.df_cv_performance = df_cv_performance.sort_values('list_mean_cv_f1', ascending=False)
 
     def __find_best_model_and_parma(self):
 
@@ -432,7 +453,7 @@ class ChurnPrediction:
         self.best_model = self.dict_cv_model_and_loss[best_model_index][best_cv_index]['model']
 
         # find the best parmas (some parmas are not required to test model performance)
-        list_parmas_not_for_test_model = ['shuffle', 'dropout_percent', 'list_layers_input_size', 'oversampling_w']
+        list_parmas_not_for_test_model = ['shuffle', 'oversampling_w']
         list_parmas_to_test_model = list(set(df_best_model_cv_perf.columns) - set(list_parmas_not_for_test_model))
 
         self.dict_best_parmas_to_test_model = \
@@ -441,7 +462,9 @@ class ChurnPrediction:
     def test_model(self, dataset):
 
         self.__extract_parmas(self.dict_best_parmas_to_test_model, is_train_model=False)
-        self.__load_parmas(is_train_model=False)
+        # build the model and assign the parmas in optimizer only
+        self.__build_model()
+        self.__load_lf_and_optim_parmas()
 
         if dataset == 'test_set':
             self._NNDataP._prepare_test_dataloader(batch_size=self.batch_size)
@@ -458,9 +481,6 @@ class ChurnPrediction:
             raise AttributeError("object has no attribute 'best_model'" +
                                  '\nyou need to train a model or load a model')
 
-        self.list_test_acc = []
-        self.list_test_loss = []
-
         running_loss = 0.0
         num_correct = 0
         num_total_test = 0
@@ -475,16 +495,16 @@ class ChurnPrediction:
                 single_loss = self.loss_function(y_pred, ts_y)
 
                 running_loss += single_loss.item()
-                _, y_pred_label = torch.max(y_pred, dim=1)
+                _, ts_y_pred = torch.max(y_pred, dim=1)
 
                 if dataset == 'test_set':
-                    self.ts_test_pred_label = torch.cat((self.ts_test_pred_label, y_pred_label))
+                    self.ts_test_pred_label = torch.cat((self.ts_test_pred_label, ts_y_pred))
                     self.ts_test_label = torch.cat((self.ts_test_label, ts_y))
                 elif dataset == 'train_valid_set':
-                    self.ts_train_valid_pred_label = torch.cat((self.ts_train_valid_pred_label, y_pred_label))
+                    self.ts_train_valid_pred_label = torch.cat((self.ts_train_valid_pred_label, ts_y_pred))
                     self.ts_train_valid_label = torch.cat((self.ts_train_valid_label, ts_y))
 
-                num_correct += torch.sum(y_pred_label == ts_y).item()
+                num_correct += torch.sum(ts_y_pred == ts_y).item()
                 num_total_test += ts_y.size(0)
 
             test_accuracy = 100 * num_correct / num_total_test
@@ -496,6 +516,32 @@ class ChurnPrediction:
     def show_classification_report(self, dataset):
 
         print("Classification report:")
+        x, y = self.__find_spec_set_records(dataset)
+
+        return pd.DataFrame(metrics.classification_report(
+            x, y, output_dict=True, target_names=['Not exited', 'Exited'])).T
+
+    def __build_cf_matrix(self, dataset):
+
+        x, y = self.__find_spec_set_records(dataset)
+
+        self.array_cf_matrix = confusion_matrix(x, y)
+
+    def plot_cf_matrix(self, dataset, normalize=None):
+
+        self.__build_cf_matrix(dataset)
+
+        # labels = ['True Neg','False Pos','False Neg','True Pos']
+        categories = ['Not Exited', 'Exited']
+        make_confusion_matrix(self.array_cf_matrix,
+                             group_names=None,
+                             categories=categories,
+                             cmap='Blues',
+                             figsize = (10, 5),
+                             normalize=normalize)
+
+    def __find_spec_set_records(self, dataset):
+
         if dataset == 'test_set':
             if self.ts_test_pred_label is None:
                 raise AttributeError("the attribute 'ts_test_pred_label' is empty" +
@@ -510,7 +556,4 @@ class ChurnPrediction:
             x = self.ts_train_valid_label
             y = self.ts_train_valid_pred_label
 
-        return pd.DataFrame(metrics.classification_report(
-            x, y, output_dict=True, target_names=['Not exited', 'Exited'])).T
-
-
+        return x, y
