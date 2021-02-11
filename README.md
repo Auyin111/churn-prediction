@@ -19,7 +19,7 @@ The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not pe
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_without_class_weight.png" width="50%" height="50%"> <br>
 56.76% of "Exited" are predicted as "Not exited".  
 
-***Train valid set classification report***<br>
+***Training validation set classification report***<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__train_set.png" width="50%" height="50%"> <br><br>
 As the cross validation result and performance of classification report are very similar, it can prove that the bad recall of 'Exited' is not caused by Overfitting and it should be caused by Underfitting. <br>
 The Underfitting should be cause by imbalance dataset, lack of enough training data or the current features are not able to predict the result. <br> <br>
