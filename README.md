@@ -18,14 +18,12 @@ The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not pe
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_without_class_weight.png" width="50%" height="50%"> <br>
 56.76% of "Exited" are predicted as "Not exited".  
 
-Finally, I created the ***train valid set*** classification report and compare to the ***test set*** classification report <br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__train_set.png" width="50%" height="50%"> <br>
+After that, I used the best model to create the ***train valid set*** classification report and compare to the ***test set*** classification report <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__train_set.png" width="50%" height="50%"> <br><br>
 As the cross validation result and performance of classification report are very similar, it can prove that the bad recall of 'Exited' is not caused by Overfitting and it should be caused by Underfitting. <br>
-The Underfitting should be cause by imbalance dataset, lack of enough training data or the current features are not enough to predict the result. <br>
+The Underfitting should be cause by imbalance dataset, lack of enough training data or the current features are not able to predict the result. <br>
 
-Also, the number of 'Exit' data is very small <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/dataset_detail.png" width="50%" height="50%"> <br>
-Hence, a greater number of data should be collected, and more useful features should be collected to improve the churn prediction. <br>
 
 After that, I assign class weight and oversampling in tuning parameter. Using Max. f1 core in stead of Min. loss to find the best model <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="100%" height="100%"> <br>
