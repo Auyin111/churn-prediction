@@ -67,6 +67,7 @@ Also, a df will show the CV performance of all parameter’s combinations.
 ***Early stopping*** <br>
 if not stop early, the model will overfit and generate a larger loss <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/train_valid_curve_expectation.png" width="50%" height="50%"> <br>
+
 ***TensorBoard*** <br>
 is a tool for providing the (***instant***) measurements and visualizations needed during the machine learning workflow <br>
 
@@ -81,6 +82,7 @@ is a tool for providing the (***instant***) measurements and visualizations need
     - fp (False positive):  it is negative but predicted as positive <br>
     - fn (False negative):  it is positive but predicted as negative <br>
     - tp (True positive)
+    - <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/precision_and_recall.png" width="50%" height="50%"> <br>
 
 ***StratifiedKFold*** <br>
 As it is a imbalance dataset, using stratified k fold can have a fair validation and testing
