@@ -5,9 +5,9 @@ Then, we can develop proper strategy to re-engage them before it is too late <br
 ## Performance and further improvement
 After testing different kind of parameters such as optimizer, dataloader, loss function, model and model structure. The best model is found by comparing ***best average cross validation loss but without class weight and oversampling***<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_2.png" width="70%" height="70%"> <br><br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_2.png" width="35%" height="35%"> <br><br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_2.png" width="70%" height="70%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_2.png" width="35%" height="35%"> <br>
 
 Compare the training and validation curve in tensorboard, I found that the ***best model*** performance ***(loss and accuracy)*** of training and validation are very close to each other <br>
 Hence, the model almost learned all the thing from training set so we do not need to further tune the model structure, batch size, learning rate and etc. <br>
@@ -27,8 +27,8 @@ Also, the number of 'Exit' data is very small <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/dataset_detail.png" width="50%" height="50%"> <br>
 Hence, a greater number of data should be collected, and more useful features should be collected to improve the churn prediction. <br>
 
-After that, I assign class weight and oversampling in tuning parameter. Using Max. f1 core in stead of Min. loss to find the best model
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="50%" height="50%"> <br>
+After that, I assign class weight and oversampling in tuning parameter. Using Max. f1 core in stead of Min. loss to find the best model <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="100%" height="100%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_2.png" width="50%" height="50%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set_with_class_weight.png" width="50%" height="50%"> <br>
 The recall of 'Exited' is improved but the precision reduce. <br>
@@ -51,7 +51,7 @@ The cross validation training and validation curve will be stored and display on
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/tsboard_demo.png" width="60%" height="60%"> <br>
 
 Also, a df will show the CV performance of all parameter’s combinations.
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/cross_validation_performance.png" width="60%" height="60%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/cross_validation_performance.png" width="100%" height="100%"> <br>
 
 ## Technical term description
 ***Embeddings*** <br>
