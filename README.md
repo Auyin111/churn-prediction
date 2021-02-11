@@ -3,27 +3,45 @@ Using embedding combine the categorical data and numerical data to predict which
 Then, we can develop proper strategy to re-engage them before it is too late <br>
 
 ## Performance and further improvement
-After testing different kind of parameters such as optimizer, dataloader, loss function, model and model structure. The best model is found by comparing best ***average*** cross validation loss<br>
+After testing different kind of parameters such as optimizer, dataloader, loss function, model and model structure. The best model is found by comparing ***best average cross validation loss but without class weight and oversampling***<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_2.png" width="70%" height="70%"> <br><br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_2.png" width="70%" height="70%"> <br>
 
 Compare the training and validation curve in tensorboard, I found that the ***best model*** performance ***(loss and accuracy)*** of training and validation are very close to each other <br>
-Hence, the model almost learned all the thing from training set so we do not need to further tune the model. <br>
+Hence, the model almost learned all the thing from training set so we do not need to further tune the model structure, batch size, learning rate and etc. <br>
 
 Then, I used the best model to create the ***test set*** classification report<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set.png" width="50%" height="50%"> <br>
 The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not perform well <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_without_class_weight.png" width="50%" height="50%"> <br>
+56.76% of "Exited" are predicted as "Not exited".  
 
-Finally, I created the ***train set*** classification report and compare to the ***test set*** classification report <br>
+Finally, I created the ***train valid set*** classification report and compare to the ***test set*** classification report <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__train_set.png" width="50%" height="50%"> <br>
 As the cross validation result and performance of classification report are very similar, it can prove that the bad recall of 'Exited' is not caused by Overfitting and it should be caused by Underfitting. <br>
-The Underfitting should be cause by lack of enough training data or the current features are not enough to predict the result. <br>
+The Underfitting should be cause by imbalance dataset, lack of enough training data or the current features are not enough to predict the result. <br>
 
 Also, the number of 'Exit' data is very small <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/dataset_detail.png" width="50%" height="50%"> <br>
 Hence, a greater number of data should be collected, and more useful features should be collected to improve the churn prediction. <br>
+
+After that, I assign class weight and oversampling in tuning parameter. Using Max. f1 core in stead of Min. loss to find the best model
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="50%" height="50%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_2.png" width="50%" height="50%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set_with_class_weight.png" width="50%" height="50%"> <br>
+The recall of 'Exited' is improved but the precision reduce. <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_with_class_weight.png" width="50%" height="50%"> <br>
+
+***Conclusion***
+1) A greater number of data should be collected, and more useful features <br>
+2) Use different parameters to tune model
+    - model structure, optimizer, batch_size etc.
+    - to reduce the impact of imbalance dataset: tune class weight and oversampling
+3) In this business case, the recall of 'Exited' is much more important than precision of 'Exited'
+    - Low precision of 'Not exited' will increase the promotion cost when we re-engage customer
+    - But low recall of 'Exited' will loss the customer
 
 ## Model tuning
 Allow to cross validate different kind of parameters easily in a dictionary, such as optimizer, dataloader, loss function, model and model structure <br>
@@ -53,10 +71,16 @@ if not stop early, the model will overfit and generate a larger loss <br>
 is a tool for providing the (***instant***) measurements and visualizations needed during the machine learning workflow <br>
 
 ***Classification report*** <br>
-Precision: tp / actual result = tp / (tp + fp)   <br>
-Recall: tp / predicted result = tp/(tp + fn)  <br>
-F1 = 2 * (precision * recall) / (precision + recall) <br>
-support is the number of samples of the true response <br>
+1. Precision: tp / actual result = tp / (tp + fp)   <br>
+    - How many selected items are relevant?
+2. Recall: tp / predicted result = tp/(tp + fn)   <br>
+    - How many relevant items are selected?
+3. F1 = 2 * (precision * recall) / (precision + recall) <br>
+4. Support is the number of samples of the true response <br>
+5. Remarks: <br>
+    - fp (False positive):  it is negative but predicted as positive <br>
+    - fn (False negative):  it is positive but predicted as negative <br>
+    - tp (True positive)
 
 ***StratifiedKFold*** <br>
 As it is a imbalance dataset, using stratified k fold can have a fair validation and testing
