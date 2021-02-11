@@ -25,12 +25,13 @@ The Underfitting should be cause by imbalance dataset, lack of enough training d
 
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/dataset_detail.png" width="50%" height="50%"> <br>
 
-After that, I assign class weight and oversampling in tuning parameter. Using Max. f1 core in stead of Min. loss to find the best model <br>
+After that, I assign class weight and oversampling in tuning parameter. Using ***Max. f1 core in stead of Min. loss*** to find the best model <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="100%" height="100%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_2.png" width="50%" height="50%"> <br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set_with_class_weight.png" width="50%" height="50%"> <br>
-The recall of 'Exited' is improved but the precision reduce. <br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_with_class_weight.png" width="50%" height="50%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set_with_class_weight.png" width="80%" height="80%"> <br>
+The recall of 'Exited' is improved but the precision reduce. <br><br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_with_class_weight.png" width="80%" height="80%"> <br>
+37.10% of "Exited" are predicted as "Not exited" (already reduce 19.66%)
 
 ***Conclusion***
 1) A greater number of data should be collected, and more useful features <br>
@@ -45,7 +46,7 @@ The recall of 'Exited' is improved but the precision reduce. <br>
 Allow to cross validate different kind of parameters easily in a dictionary, such as optimizer, dataloader, loss function, model and model structure <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/declare_tuning_parmas.png" width="40%" height="40%"> <br>
 
-The cross validation training and validation curve will be stored and display on tensorboard ***instantly*** you can stop a model if you find the trend is not good in any time <br>
+The cross validation training and validation curve will be stored and display on tensorboard ***instantly*** so you can stop a model if you find the trend is not good in any time <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/tsboard_demo.png" width="60%" height="60%"> <br>
 
 Also, a df will show the CV performance of all parameter’s combinations.
