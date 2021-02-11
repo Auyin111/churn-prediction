@@ -3,7 +3,8 @@ Using embedding combine the categorical data and numerical data to predict which
 Then, we can develop proper strategy to re-engage them before it is too late <br>
 
 ## Performance and further improvement
-After testing different kind of parameters such as optimizer, dataloader, loss function, model and model structure. The best model is found by comparing ***best average cross validation loss but without class weight and oversampling***<br>
+***Without class weight and oversampling***
+After testing different kind of parameters such as optimizer, dataloader, loss function, model and model structure. The best model is found by comparing ***best average cross validation loss***<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_2.png" width="35%" height="35%"> <br><br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
@@ -21,11 +22,11 @@ The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not pe
 After that, I used the best model to create the ***train valid set*** classification report and compare to the ***test set*** classification report <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__train_set.png" width="50%" height="50%"> <br><br>
 As the cross validation result and performance of classification report are very similar, it can prove that the bad recall of 'Exited' is not caused by Overfitting and it should be caused by Underfitting. <br>
-The Underfitting should be cause by imbalance dataset, lack of enough training data or the current features are not able to predict the result. <br>
-
+The Underfitting should be cause by imbalance dataset, lack of enough training data or the current features are not able to predict the result. <br> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/dataset_detail.png" width="50%" height="50%"> <br>
 
-After that, I assign class weight and oversampling in tuning parameter. Using ***Max. f1 core in stead of Min. loss*** to find the best model <br>
+***Assign class weight and oversampling***
+Using ***Max. f1 core in stead of Min. loss*** to find the best model <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="100%" height="100%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_2.png" width="50%" height="50%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set_with_class_weight.png" width="80%" height="80%"> <br>
