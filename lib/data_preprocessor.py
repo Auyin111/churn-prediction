@@ -92,9 +92,6 @@ class NNDataPreprocess:
     def __train_test_split(self, test_size=0.2, random_state=42, is_stratify=True):
         """is_stratify --> split the train test stratify"""
 
-        self.num_test_records = 1000
-        self.num_valid_records = 1000
-
         # categorical data
         ts_categ_data = self.__convert_df_to_ts(self.df_all_data[self.list_col_converted_categorical], torch.int64)
 
