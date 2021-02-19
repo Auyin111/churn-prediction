@@ -9,12 +9,11 @@ After testing different kind of parameters such as optimizer, dataloader, loss f
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/accuracy_of_training_and_validation_curve_2.png" width="35%" height="35%"> <br><br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/loss_of_training_and_validation_curve_2.png" width="35%" height="35%"> <br>
-
 Compare the training and validation curve in tensorboard, I found that the ***best model*** performance ***(loss and accuracy)*** of training and validation are very close to each other. Hence, the model almost learned all the thing from training set.<br>
 
 ***Test set classification report***<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set.png" width="50%" height="50%"> <br>
-The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not perform well <br><br>
+The f1-score of 'Not exited' is quite good but the recall of 'Exited' can not perform well <br>
 
 ***Training validation set classification report***<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__train_set.png" width="50%" height="50%"> <br>
