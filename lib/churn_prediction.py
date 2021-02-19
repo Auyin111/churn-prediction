@@ -36,9 +36,8 @@ class ChurnPrediction:
         self._parmas_selector = ParmasSelector()
 
         # __________init variable__________
-        self.__df_all_combinations = None
 
-        # _______all tuning parmas_______
+        # _____all tuning parmas_____
         # optimizer_parmas
         self.amsgrad = None
         self.lr = None
@@ -52,25 +51,35 @@ class ChurnPrediction:
         self.list_layers_input_size = None
         self.dropout_percent = None
 
-        # _______other variable_______
-        self.cv_num = None
-        self.df_best_model_cv_perf = None
-
-        self.model = None
-        self.best_model = None
-        self.dict_best_parmas_to_test_model = None
-        # remark: first int: model_index, second int: cv_index (cv_num - 1), model: model, float: cv_loss
-        self.dict_cv_model_and_loss: Dict[int, Dict[int, Union[model, float]]] = {}
-
+        # _____combinations_____
         self.parameters = None
+        self.__df_all_combinations = None
+        self.str_parmas_desc = None
 
-        self.num_max_epochs = None
-        self.early_stopping = None
-
+        # _____logging_____
         self.is_log_in_tsboard = None
         self.log_dir = None
 
-        self.ts_test_pred_label = None
+        # _____cv_____
+        self.num_max_epochs = None
+        self.early_stopping = None
+        self.cv_strategy = None
+        self.cv_iterator = None
+        self.cv_num = None
+        self.df_best_model_cv_perf = None
+        # remark: first int: model_index, second int: cv_index (cv_num - 1), model: model, float: cv_loss
+        self.dict_cv_model_and_loss: Dict[int, Dict[int, Union[model, float]]] = {}
+
+        # _____model_____
+        self.model = None
+        self.best_model = None
+        self.dict_best_parmas_to_test_model = None
+
+        # _____testing model records_____
+        self.array_epoch_y_train = None
+        self.array_epoch_y_train_pred = None
+        self.array_epoch_y_test = None
+        self.array_epoch_y_test_pred = None
         # ______________
 
         print("ChurnPrediction object created")
@@ -177,10 +186,10 @@ class ChurnPrediction:
     def __build_model(self):
 
         self.model = NNModel(embedding_size=self._NNDataP.list_categorical_embed_sizes,
-                                num_numerical_cols=len(self._NNDataP.list_col_numerical),
-                                output_size=2,
-                                list_layers_input_size=self.list_layers_input_size,
-                                dropout_percent=self.dropout_percent)
+                             num_numerical_cols=len(self._NNDataP.list_col_numerical),
+                             output_size=2,
+                             list_layers_input_size=self.list_layers_input_size,
+                             dropout_percent=self.dropout_percent)
 
         self.model = self.model.to(self.device)
 
@@ -321,7 +330,7 @@ class ChurnPrediction:
             print(f'model_parmas: {self.str_parmas_desc}')
 
             for train_index, valid_index in self.cv_iterator.split(self._NNDataP.ts_categ_train_valid,
-                                                              self._NNDataP.ts_output_train_valid):
+                                                                   self._NNDataP.ts_output_train_valid):
 
                 self._NNDataP.prepare_cv_dataloader(train_index, valid_index,
                                                     self.batch_size, self.shuffle,
@@ -366,7 +375,6 @@ class ChurnPrediction:
                 print('')
 
         print('\nAll model is trained successfully')
-        self.__preprocess_cv_performance()
         self.__find_best_model_and_parma()
 
     def test_model(self, dataset, str_epoch_operation='Testing'):
@@ -400,14 +408,13 @@ class ChurnPrediction:
     # _____________
 
     # _______visualize setting and performance_______
-
     def preview_model(self):
 
         return print(self.model)
 
     def show_label_distribution(self):
 
-        df_label_pie_chart = self._NNDataP._prepare_plot_pie_ftr_distribution()
+        df_label_pie_chart = self._NNDataP.prepare_plot_pie_ftr_distribution()
         self._chart_visual.plot_pie_label_distribution(df_label_pie_chart,
                                                        'counts', 'status', 'Exited and not Exited distribution')
 
@@ -437,11 +444,11 @@ class ChurnPrediction:
         # labels = ['True Neg','False Pos','False Neg','True Pos']
         categories = ['Not Exited', 'Exited']
         make_confusion_matrix(self.array_cf_matrix,
-                             group_names=None,
-                             categories=categories,
-                             cmap='Blues',
-                             figsize = (10, 5),
-                             normalize=normalize)
+                              group_names=None,
+                              categories=categories,
+                              cmap='Blues',
+                              figsize=(10, 5),
+                              normalize=normalize)
     # ______________
 
     # _______logging_______
@@ -485,57 +492,10 @@ class ChurnPrediction:
         )
     # ______________
 
-    # _______other_______
-
-    @staticmethod
-    def __init_seeds(seed):
-        torch.manual_seed(seed)  # sets the seed for generating random numbers.
-        torch.cuda.manual_seed(
-            seed)  # Sets the seed for generating random numbers for the current GPU. It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
-        torch.cuda.manual_seed_all(
-            seed)  # Sets the seed for generating random numbers on all GPUs. It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
-
-        if seed == 0:
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-
-    def __preprocess_cv_performance(self):
-
-        # extract cv loss and f1 from dictionary
-        list_list_cv_loss: List[List[float]] = []
-        list_list_cv_f1: List[List[float]] = []
-        for model_index, dict_cv_index_model_and_loss in self.dict_cv_model_and_loss.items():
-            list_cv_loss = []
-            list_cv_f1 = []
-            for cv_index, dict_model_and_loss in dict_cv_index_model_and_loss.items():
-                list_cv_loss.append(dict_model_and_loss['cv_loss'])
-                list_cv_f1.append(dict_model_and_loss['cv_f1'])
-            list_list_cv_loss.append(list_cv_loss)
-            list_list_cv_f1.append(list_cv_f1)
-
-        df_cv_performance = self.__df_all_combinations.copy()
-        # TODO code tidy
-        # TODO rename list_mean_cv_loss --> no list
-        df_cv_performance['list_cv_loss'] = list_list_cv_loss
-        df_cv_performance['list_mean_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.mean(x))
-        df_cv_performance['list_std_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.std(x))
-
-        df_cv_performance['list_cv_f1'] = list_list_cv_f1
-        df_cv_performance['list_mean_cv_f1'] = df_cv_performance['list_cv_f1'].apply(lambda x: np.mean(x))
-        df_cv_performance['list_std_cv_f1'] = df_cv_performance['list_cv_f1'].apply(lambda x: np.std(x))
-
-        # 'model_index' is used to find the best parameter and the best cv number
-        # the order of df_cv_performance is equal to dict_cv_model_and_loss are some
-        df_cv_performance['model_index'] = [model_index for model_index in self.dict_cv_model_and_loss.keys()]
-
-        if self.cv_strategy == 'min_loss':
-            df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_loss'].apply(lambda x: x.index(min(x)))
-            self.df_cv_performance = df_cv_performance.sort_values('list_mean_cv_loss')
-        elif self.cv_strategy == 'max_f1':
-            df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_f1'].apply(lambda x: x.index(max(x)))
-            self.df_cv_performance = df_cv_performance.sort_values('list_mean_cv_f1', ascending=False)
-
+    # _______find best model and parmas______
     def __find_best_model_and_parma(self):
+
+        self.__preprocess_cv_performance()
 
         df_best_model_cv_perf = self.df_cv_performance.head(1)
 
@@ -549,6 +509,68 @@ class ChurnPrediction:
 
         self.dict_best_parmas_to_test_model = \
             df_best_model_cv_perf[list_parmas_to_test_model].to_dict('records')[0]
+
+    def __preprocess_cv_performance(self):
+
+        list_list_cv_loss, list_list_cv_f1 = self.__extract_cv_performance_from_dict()
+        df_cv_performance = self.__assign_cv_performance_in_df(list_list_cv_loss, list_list_cv_f1)
+
+        # 'model_index' is used to find the best parameter and the best cv number
+        # the order of df_cv_performance is equal to dict_cv_model_and_loss are some
+        df_cv_performance['model_index'] = [model_index for model_index in self.dict_cv_model_and_loss.keys()]
+
+        if self.cv_strategy == 'min_loss':
+            df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_loss'].apply(lambda x: x.index(min(x)))
+            self.df_cv_performance = df_cv_performance.sort_values('mean_cv_loss')
+        elif self.cv_strategy == 'max_f1':
+            df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_f1'].apply(lambda x: x.index(max(x)))
+            self.df_cv_performance = df_cv_performance.sort_values('mean_cv_f1', ascending=False)
+
+    def __extract_cv_performance_from_dict(self):
+
+        list_list_cv_loss: List[List[float]] = []
+        list_list_cv_f1: List[List[float]] = []
+        for model_index, dict_cv_index_model_and_loss in self.dict_cv_model_and_loss.items():
+            list_cv_loss = []
+            list_cv_f1 = []
+            for cv_index, dict_model_and_loss in dict_cv_index_model_and_loss.items():
+                list_cv_loss.append(dict_model_and_loss['cv_loss'])
+                list_cv_f1.append(dict_model_and_loss['cv_f1'])
+            list_list_cv_loss.append(list_cv_loss)
+            list_list_cv_f1.append(list_cv_f1)
+
+        return list_list_cv_loss, list_list_cv_f1
+
+    def __assign_cv_performance_in_df(self, list_list_cv_loss, list_list_cv_f1):
+
+        df_cv_performance = self.__df_all_combinations.copy()
+
+        df_cv_performance['list_cv_loss'] = list_list_cv_loss
+        df_cv_performance['mean_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.mean(x))
+        df_cv_performance['std_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.std(x))
+
+        df_cv_performance['list_cv_f1'] = list_list_cv_f1
+        df_cv_performance['mean_cv_f1'] = df_cv_performance['list_cv_f1'].apply(lambda x: np.mean(x))
+        df_cv_performance['std_cv_f1'] = df_cv_performance['list_cv_f1'].apply(lambda x: np.std(x))
+
+        return df_cv_performance
+    # _____________
+
+    # _______other_______
+
+    @staticmethod
+    def __init_seeds(seed):
+        torch.manual_seed(seed)  # sets the seed for generating random numbers.
+        torch.cuda.manual_seed(
+            seed)  # Sets the seed for generating random numbers for the current GPU.
+        # It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
+        torch.cuda.manual_seed_all(
+            seed)  # Sets the seed for generating random numbers on all GPUs.
+        # It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
+
+        if seed == 0:
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
 
     def __prepare_best_cv_dataloader(self):
         """use the best_cv_index to find back the train_iterator"""

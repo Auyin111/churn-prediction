@@ -177,7 +177,7 @@ class NNDataPreprocess:
 
     # __________plot chart__________
 
-    def _prepare_plot_pie_ftr_distribution(self):
+    def prepare_plot_pie_ftr_distribution(self):
 
         df_output = self.df_all_data[self.list_col_outputs]
         df_output.loc[:, 'status'] = np.where(df_output.Exited == 1, 'Exit', 'Not Exit')
