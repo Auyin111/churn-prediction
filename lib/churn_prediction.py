@@ -79,19 +79,22 @@ class ChurnPrediction:
     def select_parmas(self, str_selection):
 
         self.parameters = self._parmas_selector.select(str_selection)
+
         self.__prepare_tuning_combination()
+        self.__prepare_parmas_desc()
 
-    def show_available_parmas_options(self):
-
-        print(self._parmas_selector.show_available_parmas_options())
+        print(f'number of combinations: {len(self.__df_all_combinations)}')
+        display(self.__df_all_combinations)
 
     def __prepare_tuning_combination(self):
 
         self.list_all_combinations = list(self.product_dict(**self.parameters))
         self.__df_all_combinations = pd.DataFrame(self.list_all_combinations)
         self.drop_parmas_combinations()
-        print(f'number of combinations: {len(self.__df_all_combinations)}')
-        display(self.__df_all_combinations)
+
+    def show_available_parmas_options(self):
+
+        print(self._parmas_selector.show_available_parmas_options())
 
     @staticmethod
     def product_dict(**kwargs):
@@ -192,34 +195,20 @@ class ChurnPrediction:
 
     # _______logging_______
 
-    def __prepare_parmas_desc(self, is_train_model):
-        """mark down the detail time and parmas"""
 
-        self.str_parmas_desc = ''
+    def __prepare_parmas_desc(self):
+        """create 'desc' column by considering all the parmas in that row"""
 
-        if is_train_model:
-            # model_parmas
-            self.str_parmas_desc += f'_do_p_{self.dropout_percent}'
-            # [1,2,3,4] --> '[1,2,3,4]'
-            self.str_parmas_desc += f"_ly_s_[{self.list_layers_input_size}]"
+        dict_parmas_to_abbrev = self._parmas_selector.get_dict_parmas_to_abbrev()
+        self.__df_all_combinations['desc'] = ''
 
-        # optimizer_parmas
-        self.str_parmas_desc += f'_opt_{self.optimizer_attr}'
-        self.str_parmas_desc += f'_lr_{self.lr}'
-        self.str_parmas_desc += f'_amsgrad_{self.amsgrad}'
+        for col in self.__df_all_combinations:
+            if col != 'desc':
+                self.__df_all_combinations['desc'] += self.__df_all_combinations.apply(
+                    lambda x: f"""{dict_parmas_to_abbrev.get(col, col)}_{x[col]}_""", axis=1) \
 
-        # loss_function_parmas
-        if self.class_weight is not None:
-            self.str_parmas_desc += f'_cw_{self.class_weight[0]:.2f}_{self.class_weight[1]:.2f}'
-        else:
-            self.str_parmas_desc += '_no_cw'
 
-        # dataloader_parmas
-        self.str_parmas_desc += f'_bs_{self.batch_size}'
-        self.str_parmas_desc += f'_shuffle_{self.shuffle}'
-
-        # oversampling_weight
-        self.str_parmas_desc += f'_os_w_{self.oversampling_w}'
+        self.__df_all_combinations['desc'] = self.__df_all_combinations['desc'].str.strip('_')
 
     def __create_tsboard_writer(self):
 
@@ -350,6 +339,7 @@ class ChurnPrediction:
             self.cv_num = 1
 
             dict_parmas = dict(row)
+            self.str_parmas_desc = row['desc']
             self.__extract_parmas(dict_parmas, is_train_model=True)
 
             for train_index, valid_index in cv_iterator.split(self._NNDataP.ts_categ_train_valid,
@@ -357,7 +347,6 @@ class ChurnPrediction:
 
                 self.__build_model()
                 self.__load_lf_and_optim_parmas()
-                self.__prepare_parmas_desc(is_train_model=True)
 
                 self.nn_model.parmas_desc = self.str_parmas_desc
                 print('train and valid model: ', self.nn_model.parmas_desc)

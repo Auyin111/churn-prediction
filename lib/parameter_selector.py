@@ -15,6 +15,22 @@ class ParmasSelector(object):
                 'get_parmas_' in selection]
 
     @staticmethod
+    def get_dict_parmas_to_abbrev():
+        """if the parmas can be found in this dict,
+        tsboard and epoch performance will be logged by their abbreviation"""
+
+        return {
+            'optimizer_attr': 'optim',
+            'amsgrad': 'ams',
+            'batch_size': 'bs',
+            'shuffle': 'sf',
+            'class_weight': 'cw',
+            'dropout_percent': 'dp',
+            'list_layers_input_size': 'ls',
+            'oversampling_w': 'ow'
+        }
+
+    @staticmethod
     def get_parmas_baseline():
 
         return dict(
