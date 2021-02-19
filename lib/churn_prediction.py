@@ -557,7 +557,6 @@ class ChurnPrediction:
     # _____________
 
     # _______other_______
-
     @staticmethod
     def __init_seeds(seed):
         torch.manual_seed(seed)  # sets the seed for generating random numbers.

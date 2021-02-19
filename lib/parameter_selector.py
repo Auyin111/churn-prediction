@@ -49,7 +49,7 @@ class ParmasSelector(object):
             class_weight=[None],
 
             # model_parmas
-            dropout_percent=[0.4],
+            dropout_percent=[0.4, 0.5],
             list_layers_input_size=[[200, 100, 50]],
 
             # oversampling_weight
@@ -76,7 +76,7 @@ class ParmasSelector(object):
             class_weight=[torch.tensor([1.0, 4.0]), torch.tensor([1.0, 3.0]), torch.tensor([1.0, 2.0])],
 
             # model_parmas
-            dropout_percent=[0.4],
+            dropout_percent=[0.4, 0.5],
             list_layers_input_size=[[200, 100, 50]],
 
             # oversampling_weight
@@ -103,7 +103,7 @@ class ParmasSelector(object):
             class_weight=[None],
 
             # model_parmas
-            dropout_percent=[0.4],
+            dropout_percent=[0.4, 0.5],
             list_layers_input_size=[[200, 100, 50]],
 
             # oversampling_weight
