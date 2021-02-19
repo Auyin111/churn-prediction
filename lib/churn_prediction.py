@@ -23,19 +23,20 @@ model = TypeVar(torch.nn.modules.module.Module)
 
 class ChurnPrediction:
 
-    def __init__(self, df_all_data, is_display_detail=True, is_display_batch_info=False,):
+    def __init__(self, df_all_data, is_display_detail=True, is_display_batch_info=False, seed=0, is_stratify=True):
 
         self.is_display_detail = is_display_detail
         self.is_display_batch_info = is_display_batch_info
 
-        self._NNDataP = NNDataPreprocess(df_all_data, test_fraction=0.2)
+        self.__init_seeds(seed)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        self._NNDataP = NNDataPreprocess(df_all_data, test_fraction=0.2, seed=seed, is_stratify=is_stratify)
         self._chart_visual = ChartVisualizer()
         self._parmas_selector = ParmasSelector()
 
-        # init variable
-        self.__df_all_combinations = None
-
         # __________init variable__________
+        self.__df_all_combinations = None
 
         # _______all tuning parmas_______
         # optimizer_parmas
@@ -55,7 +56,7 @@ class ChurnPrediction:
         self.cv_num = None
         self.df_best_model_cv_perf = None
 
-        self.nn_model = None
+        self.model = None
         self.best_model = None
         self.dict_best_parmas_to_test_model = None
         # remark: first int: model_index, second int: cv_index (cv_num - 1), model: model, float: cv_loss
@@ -70,12 +71,11 @@ class ChurnPrediction:
         self.log_dir = None
 
         self.ts_test_pred_label = None
-
+        # ______________
 
         print("ChurnPrediction object created")
 
     # _______show and edit parmas setting_______
-
     def select_parmas(self, str_selection):
 
         self.parameters = self._parmas_selector.select(str_selection)
@@ -132,25 +132,22 @@ class ChurnPrediction:
 
         if len_df_org != len(self.__df_all_combinations):
             print(f'{len_df_org - len(self.__df_all_combinations)} combinations is dropped')
+    # ______________
 
-    # _______visualize setting and performance_______
+    # _______prepare, extract and load parmas_______
+    def __prepare_parmas_desc(self):
+        """create 'desc' column by considering all the parmas in that row"""
 
-    def preview_model(self):
+        dict_parmas_to_abbrev = self._parmas_selector.get_dict_parmas_to_abbrev()
+        self.__df_all_combinations['desc'] = ''
 
-        return print(self.nn_model)
+        for col in self.__df_all_combinations:
+            if col != 'desc':
+                self.__df_all_combinations['desc'] += self.__df_all_combinations.apply(
+                    lambda x: f"""{dict_parmas_to_abbrev.get(col, col)}_{x[col]}_""", axis=1) \
 
-    def show_label_distribution(self):
 
-        df_label_pie_chart = self._NNDataP._prepare_plot_pie_ftr_distribution()
-        self._chart_visual.plot_pie_label_distribution(df_label_pie_chart,
-                                                       'counts', 'status', 'Exited and not Exited distribution')
-
-    def show_tuning_combinations(self):
-
-        print(f'num of combination: {len(self.__df_all_combinations)}')
-        display(self.__df_all_combinations)
-
-    # _______extract and load parmas_______
+        self.__df_all_combinations['desc'] = self.__df_all_combinations['desc'].str.strip('_')
 
     def __extract_parmas(self, dict_parmas, is_train_model):
 
@@ -179,145 +176,121 @@ class ChurnPrediction:
 
     def __build_model(self):
 
-        self.nn_model = NNModel(embedding_size=self._NNDataP.list_categorical_embed_sizes,
+        self.model = NNModel(embedding_size=self._NNDataP.list_categorical_embed_sizes,
                                 num_numerical_cols=len(self._NNDataP.list_col_numerical),
                                 output_size=2,
                                 list_layers_input_size=self.list_layers_input_size,
                                 dropout_percent=self.dropout_percent)
 
+        self.model = self.model.to(self.device)
+
     def __load_lf_and_optim_parmas(self):
         """load parmas in loss function and optimizer"""
 
         optimizer = getattr(torch.optim, self.optimizer_attr)
-        self.optimizer = optimizer(self.nn_model.parameters(), lr=self.lr, amsgrad=self.amsgrad)
+        self.optimizer = optimizer(self.model.parameters(), lr=self.lr, amsgrad=self.amsgrad)
 
-        self.loss_function = nn.CrossEntropyLoss(weight=self.class_weight)
+        self.loss_function = nn.CrossEntropyLoss(weight=self.class_weight).to(self.device)
+    # ______________
 
-    # _______logging_______
+    # _______train, valid, cv, test______
+    def train_an_epoch(self, str_epoch_operation='Training'):
 
+        self.model.train()
 
-    def __prepare_parmas_desc(self):
-        """create 'desc' column by considering all the parmas in that row"""
+        float_avg_epoch_loss, float_epoch_acc, float_batch_f1 = \
+            self.run_an_epoch(str_epoch_operation, self._NNDataP.train_loader)
 
-        dict_parmas_to_abbrev = self._parmas_selector.get_dict_parmas_to_abbrev()
-        self.__df_all_combinations['desc'] = ''
-
-        for col in self.__df_all_combinations:
-            if col != 'desc':
-                self.__df_all_combinations['desc'] += self.__df_all_combinations.apply(
-                    lambda x: f"""{dict_parmas_to_abbrev.get(col, col)}_{x[col]}_""", axis=1) \
-
-
-        self.__df_all_combinations['desc'] = self.__df_all_combinations['desc'].str.strip('_')
-
-    def __create_tsboard_writer(self):
-
-        # Comment log_dir suffix appended to the default log_dir. If log_dir is assigned, this argument has no effect.
-        if self.log_dir is not None:
-            str_ymd_hms = datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
-            self.writer = SummaryWriter(log_dir=f'{self.log_dir}/{str_ymd_hms}{self.str_parmas_desc}')
-        else:
-            self.writer = SummaryWriter(comment=f'_{self.str_parmas_desc}')
-
-    def train_model(self, str_tsboard_subgrp='Train sets'):
-
-        self.nn_model.train()
-
-        running_loss = 0.0
-        num_correct = 0
-        num_total_train = 0
-        total_step = len(self._NNDataP.train_loader)
-
-        for batch_idx, (ts_x_categ, ts_x_numer, ts_y) in enumerate(self._NNDataP.train_loader):
-            self.nn_model.train()
-
-            y_pred = self.nn_model(ts_x_categ, ts_x_numer)
-            single_loss = self.loss_function(y_pred, ts_y)
-
-            # Initializing a gradient as 0 so there is no mixing of gradient among the batches
-            self.optimizer.zero_grad()
-            # Propagating the error backward
-            single_loss.backward()
-            # Optimizing the parameters
-            self.optimizer.step()
-
-            running_loss += single_loss.item()
-            _, ts_y_pred = torch.max(y_pred, dim=1)
-            num_correct += torch.sum(ts_y_pred == ts_y).item()
-            num_total_train += ts_y.size(0)
-            if self.is_display_batch_info:
-                if (batch_idx) % 5 == 0:
-                    print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
-                          .format(self.epoch, self.num_max_epochs, batch_idx, total_step, single_loss.item()))
-
-            self.ts_train_all_y = torch.cat((self.ts_train_all_y, ts_y), 0)
-            self.ts_train_all_y_pred = torch.cat((self.ts_train_all_y_pred, ts_y_pred), 0)
-
-        accuracy = 100 * num_correct / num_total_train
-        loss = running_loss / total_step
-        f1 = sklearn.metrics.f1_score(self.ts_train_all_y,
-                                      self.ts_train_all_y_pred, labels=None, pos_label=1, average='macro',
-                                      zero_division='warn')
-
+        # _____logging_____
         if self.is_display_detail:
-            print(f'Train loss: {loss:.4f}, train acc: {accuracy:.4f}')
+            self.__log_epoch_perf(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc, float_batch_f1)
 
         if self.is_log_in_tsboard:
-            self.writer.add_scalar(
-                f'Loss/{str_tsboard_subgrp} cv_{self.cv_num}', loss, self.epoch
-            )
-            self.writer.add_scalar(
-                f'Accuracy/{str_tsboard_subgrp} cv_{self.cv_num}', accuracy, self.epoch
-            )
-            self.writer.add_scalar(
-                f'f1/{str_tsboard_subgrp} cv_{self.cv_num}', f1, self.epoch
-            )
+            self.__log_in_tsboard(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc, float_batch_f1)
 
-    def valid_model(self, str_tsboard_subgrp='Validation sets'):
+    def validate_an_epoch(self, str_epoch_operation='Validation'):
 
-        running_loss = 0.0
-        num_correct = 0
-        num_total_valid = 0
+        self.model.eval()
 
-        # reduce memory consumption
-        with torch.no_grad():
-            self.nn_model.eval()
+        torch.set_grad_enabled(False)
+        float_avg_epoch_loss, float_epoch_acc, float_batch_f1 = \
+            self.run_an_epoch(str_epoch_operation, self._NNDataP.valid_loader)
+        torch.set_grad_enabled(True)
 
-            for batch_idx, (ts_x_categ, ts_x_numer, ts_y) in enumerate(self._NNDataP.valid_loader):
-                y_pred = self.nn_model(ts_x_categ, ts_x_numer)
-                single_loss = self.loss_function(y_pred, ts_y)
+        # _____logging_____
+        if self.is_display_detail:
+            self.__log_epoch_perf(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc, float_batch_f1)
 
-                running_loss += single_loss.item()
-                _, ts_y_pred = torch.max(y_pred, dim=1)
-                num_correct += torch.sum(ts_y_pred == ts_y).item()
-                num_total_valid += ts_y.size(0)
-
-                self.ts_valid_all_y = torch.cat((self.ts_valid_all_y, ts_y), 0)
-                self.ts_valid_all_y_pred = torch.cat((self.ts_valid_all_y_pred, ts_y_pred), 0)
-
-            valid_accuracy = 100 * num_correct / num_total_valid
-            valid_loss = running_loss / len(self._NNDataP.valid_loader)
-            f1 = sklearn.metrics.f1_score(self.ts_valid_all_y,
-                                          self.ts_valid_all_y_pred, labels=None, pos_label=1, average='weighted',
-                                          zero_division='warn')
-
-            if self.is_display_detail:
-                print(f'Valid loss: {valid_loss:.4f}, valid acc: {valid_accuracy:.4f}')
-
-            if self.is_log_in_tsboard:
-                self.writer.add_scalar(
-                    f'Loss/{str_tsboard_subgrp} cv_{self.cv_num}', valid_loss, self.epoch
-                )
-                self.writer.add_scalar(
-                    f'Accuracy/{str_tsboard_subgrp} cv_{self.cv_num}', valid_accuracy, self.epoch
-                )
-                self.writer.add_scalar(
-                    f'f1/{str_tsboard_subgrp} cv_{self.cv_num}', f1, self.epoch
-                )
+        if self.is_log_in_tsboard:
+            self.__log_in_tsboard(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc, float_batch_f1)
+        # __________
 
         # early_stopping needs the validation loss to check if it has improved,
         # and if it has, it will make a checkpoint of the current model
-        self.early_stopping(self.nn_model, valid_loss, f1)
+        self.early_stopping(self.model, float_avg_epoch_loss, float_batch_f1)
+
+    def run_an_epoch(self, str_epoch_operation, data_loader, dataset=''):
+
+        total_step = len(data_loader)
+
+        float_epoch_loss = 0.0
+        ts_epoch_y = torch.empty(0, device=self.device)
+        ts_epoch_y_pred = torch.empty(0, device=self.device)
+
+        for batch_idx, (ts_x_categ, ts_x_numer, ts_y) in enumerate(data_loader):
+
+            ts_x_categ = ts_x_categ.to(self.device)
+            ts_x_numer = ts_x_numer.to(self.device)
+            ts_y = ts_y.to(self.device)
+
+            ts_y_pred_values = self.model(ts_x_categ, ts_x_numer)
+            _, ts_y_pred = torch.max(ts_y_pred_values, dim=1)
+
+            # ts_rounded_pred = torch.round(torch.sigmoid(ts_y_pred_values))
+            ts_batch_loss = self.loss_function(ts_y_pred_values, ts_y)
+
+            # backup, then find acc and f1 later
+            ts_epoch_y = torch.cat((ts_epoch_y, ts_y), 0)
+            ts_epoch_y_pred = torch.cat((ts_epoch_y_pred, ts_y_pred), 0)
+
+            if str_epoch_operation == 'Training':
+                # Initializing a gradient as 0 so there is no mixing of gradient among the batches
+                self.optimizer.zero_grad()
+                # Propagating the error backward
+                ts_batch_loss.backward()
+                # # Optimizing the parameters
+                self.optimizer.step()
+
+            if self.is_display_batch_info:
+                if batch_idx % 5 == 0:
+                    self.__log_batch_perf(batch_idx, total_step, ts_batch_loss)
+
+            float_epoch_loss += ts_batch_loss.item()
+
+        float_avg_epoch_loss = float_epoch_loss / total_step
+        float_epoch_acc = self.cal_accuracy(ts_epoch_y_pred, ts_epoch_y)
+
+        # cpu: copy tensor to host memory first
+        # detach: the return variable do not have grad
+        array_epoch_y = ts_epoch_y.cpu().detach().numpy()
+        array_epoch_y_pred = ts_epoch_y_pred.cpu().detach().numpy()
+
+        float_batch_f1 = sklearn.metrics.f1_score(array_epoch_y,
+                                                  array_epoch_y_pred,
+                                                  labels=None, pos_label=1, average='macro',
+                                                  zero_division='warn')
+
+        # back up the y and prediction when 'Testing'
+        if str_epoch_operation == 'Testing':
+
+            if dataset == 'train_set':
+                self.array_epoch_y_train = array_epoch_y
+                self.array_epoch_y_train_pred = array_epoch_y_pred
+            elif dataset == 'test_set':
+                self.array_epoch_y_test = array_epoch_y
+                self.array_epoch_y_test_pred = array_epoch_y_pred
+
+        return float_avg_epoch_loss, float_epoch_acc, float_batch_f1
 
     # find the best model by cv
     def cross_validate(self, cv_strategy: str, num_max_epochs=10, patience=10, is_log_in_tsboard=True,
@@ -329,7 +302,7 @@ class ChurnPrediction:
         self.is_log_in_tsboard = is_log_in_tsboard
         self.log_dir = log_dir
 
-        cv_iterator = StratifiedKFold(n_splits=cv_n_splits)
+        self.cv_iterator = StratifiedKFold(n_splits=cv_n_splits)
 
         for model_idx, row in self.__df_all_combinations.iterrows():
 
@@ -342,32 +315,30 @@ class ChurnPrediction:
             self.str_parmas_desc = row['desc']
             self.__extract_parmas(dict_parmas, is_train_model=True)
 
-            for train_index, valid_index in cv_iterator.split(self._NNDataP.ts_categ_train_valid,
+            if self.is_log_in_tsboard:
+                self.__create_tsboard_writer()
+
+            print(f'model_parmas: {self.str_parmas_desc}')
+
+            for train_index, valid_index in self.cv_iterator.split(self._NNDataP.ts_categ_train_valid,
                                                               self._NNDataP.ts_output_train_valid):
+
+                self._NNDataP.prepare_cv_dataloader(train_index, valid_index,
+                                                    self.batch_size, self.shuffle,
+                                                    self.oversampling_w)
 
                 self.__build_model()
                 self.__load_lf_and_optim_parmas()
 
-                self.nn_model.parmas_desc = self.str_parmas_desc
-                print('train and valid model: ', self.nn_model.parmas_desc)
+                print(f'cv_num: {self.cv_num}')
 
-                self.ts_train_all_y = torch.empty(0)
-                self.ts_train_all_y_pred = torch.empty(0)
-                self.ts_valid_all_y = torch.empty(0)
-                self.ts_valid_all_y_pred = torch.empty(0)
-
-                if self.is_log_in_tsboard:
-                    self.__create_tsboard_writer()
-                self._NNDataP.prepare_cv_dataloader(train_index, valid_index,
-                                                    self.batch_size, self.shuffle,
-                                                    self.oversampling_w)
                 self.early_stopping = EarlyStopping(patience=patience, verbose=self.is_display_detail,
                                                     is_save_checkpoint=True)
 
                 for self.epoch in range(1, self.num_max_epochs + 1):
 
-                    self.train_model()
-                    self.valid_model()
+                    self.train_an_epoch()
+                    self.validate_an_epoch()
 
                     if self.early_stopping.early_stop:
                         print(f"Early stopping at {self.epoch}")
@@ -377,7 +348,7 @@ class ChurnPrediction:
                         print('')
 
                 # load the last checkpoint with the best model
-                self.nn_model.load_state_dict(torch.load('checkpoint.pt'))
+                self.model.load_state_dict(torch.load('checkpoint.pt'))
 
                 # backup the best model each of the cv and it loss
                 if model_idx not in self.dict_cv_model_and_loss.keys():
@@ -386,7 +357,7 @@ class ChurnPrediction:
                     self.dict_cv_model_and_loss[model_idx][self.cv_num - 1] = {}
 
                 # record all the model and it best loss (remark: self.cv_num - 1 = cv number index)
-                self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['model'] = self.nn_model
+                self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['model'] = self.model
                 self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_loss'] = - self.early_stopping.best_score
                 self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_f1'] = self.early_stopping.f1
 
@@ -398,8 +369,138 @@ class ChurnPrediction:
         self.__preprocess_cv_performance()
         self.__find_best_model_and_parma()
 
+    def test_model(self, dataset, str_epoch_operation='Testing'):
+
+        if not hasattr(self, 'best_model'):
+            raise AttributeError("object has no attribute 'best_model'" +
+                                 '\nyou need to train a model or load a model')
+
+        self.__extract_parmas(self.dict_best_parmas_to_test_model, is_train_model=False)
+
+        self.model = self.best_model
+        self.__load_lf_and_optim_parmas()
+
+        if dataset == 'test_set':
+            self._NNDataP._prepare_test_dataloader(self.batch_size)
+            dataloader = self._NNDataP.test_loader
+        # # use the training set test the model (check whether underfitting)
+        elif dataset == 'train_set':
+            # find past train_dataloader which is the best
+            self.__prepare_best_cv_dataloader()
+            dataloader = self._NNDataP.train_loader
+        else:
+            raise Exception(f'{dataset} is not acceptable, either train_set or test_set are acceptable')
+
+        self.model.eval()
+
+        torch.set_grad_enabled(False)
+        _, _, _ = \
+            self.run_an_epoch(str_epoch_operation, dataloader, dataset)
+        torch.set_grad_enabled(True)
+    # _____________
+
+    # _______visualize setting and performance_______
+
+    def preview_model(self):
+
+        return print(self.model)
+
+    def show_label_distribution(self):
+
+        df_label_pie_chart = self._NNDataP._prepare_plot_pie_ftr_distribution()
+        self._chart_visual.plot_pie_label_distribution(df_label_pie_chart,
+                                                       'counts', 'status', 'Exited and not Exited distribution')
+
+    def show_tuning_combinations(self):
+
+        print(f'num of combination: {len(self.__df_all_combinations)}')
+        display(self.__df_all_combinations)
+
+    def show_classification_report(self, dataset):
+
+        print("Classification report:")
+        x, y = self.__find_spec_set_records(dataset)
+
+        return pd.DataFrame(metrics.classification_report(
+            x, y, output_dict=True, target_names=['Not exited', 'Exited'])).T
+
+    def __build_cf_matrix(self, dataset):
+
+        x, y = self.__find_spec_set_records(dataset)
+
+        self.array_cf_matrix = confusion_matrix(x, y)
+
+    def plot_cf_matrix(self, dataset, normalize=None):
+
+        self.__build_cf_matrix(dataset)
+
+        # labels = ['True Neg','False Pos','False Neg','True Pos']
+        categories = ['Not Exited', 'Exited']
+        make_confusion_matrix(self.array_cf_matrix,
+                             group_names=None,
+                             categories=categories,
+                             cmap='Blues',
+                             figsize = (10, 5),
+                             normalize=normalize)
+    # ______________
+
+    # _______logging_______
+
+    def __create_tsboard_writer(self):
+
+        # Comment log_dir suffix appended to the default log_dir. If log_dir is assigned, this argument has no effect.
+        if self.log_dir is not None:
+            str_ymd_hms = datetime.datetime.now().strftime('%Y_%m_%d__%H_%M_%S')
+            self.writer = SummaryWriter(log_dir=f'{self.log_dir}/{str_ymd_hms}{self.str_parmas_desc}')
+        else:
+            self.writer = SummaryWriter(comment=f'_{self.str_parmas_desc}')
+
+    def __log_batch_perf(self, batch_idx, total_step, ts_batch_loss):
+
+        print(
+            f'Epochs: {self.epoch}/{self.num_max_epochs}'
+            f', Step: {batch_idx}/{total_step}'
+            f', Loss: {ts_batch_loss.item():.4f}'
+        )
+
+    def __log_epoch_perf(self, str_epoch_operation, float_avg_epoch_loss, float_epoch_acc, float_batch_f1):
+
+        print(
+            f'Epochs: {self.epoch}/{self.num_max_epochs}'
+            f', {str_epoch_operation} loss: {float_avg_epoch_loss:.4f}'
+            f', {str_epoch_operation} acc: {float_epoch_acc:.4f}'
+            f', f1: {float_batch_f1:.4f}'
+        )
+
+    def __log_in_tsboard(self, str_tsboard_subgrp, float_avg_epoch_loss, float_epoch_acc, float_batch_f1):
+
+        self.writer.add_scalar(
+            f'Loss/{str_tsboard_subgrp} cv_{self.cv_num}', float_avg_epoch_loss, self.epoch
+        )
+        self.writer.add_scalar(
+            f'Accuracy/{str_tsboard_subgrp} cv_{self.cv_num}', float_epoch_acc, self.epoch
+        )
+        self.writer.add_scalar(
+            f'f1/{str_tsboard_subgrp} cv_{self.cv_num}', float_batch_f1, self.epoch
+        )
+    # ______________
+
+    # _______other_______
+
+    @staticmethod
+    def __init_seeds(seed):
+        torch.manual_seed(seed)  # sets the seed for generating random numbers.
+        torch.cuda.manual_seed(
+            seed)  # Sets the seed for generating random numbers for the current GPU. It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
+        torch.cuda.manual_seed_all(
+            seed)  # Sets the seed for generating random numbers on all GPUs. It’s safe to call this function if CUDA is not available; in that case, it is silently ignored.
+
+        if seed == 0:
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
     def __preprocess_cv_performance(self):
-        
+
         # extract cv loss and f1 from dictionary
         list_list_cv_loss: List[List[float]] = []
         list_list_cv_f1: List[List[float]] = []
@@ -414,6 +515,7 @@ class ChurnPrediction:
 
         df_cv_performance = self.__df_all_combinations.copy()
         # TODO code tidy
+        # TODO rename list_mean_cv_loss --> no list
         df_cv_performance['list_cv_loss'] = list_list_cv_loss
         df_cv_performance['list_mean_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.mean(x))
         df_cv_performance['list_std_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.std(x))
@@ -448,101 +550,43 @@ class ChurnPrediction:
         self.dict_best_parmas_to_test_model = \
             df_best_model_cv_perf[list_parmas_to_test_model].to_dict('records')[0]
 
-    def test_model(self, dataset):
+    def __prepare_best_cv_dataloader(self):
+        """use the best_cv_index to find back the train_iterator"""
 
-        self.__extract_parmas(self.dict_best_parmas_to_test_model, is_train_model=False)
-        # build the model and assign the parmas in optimizer only
-        self.__build_model()
-        self.__load_lf_and_optim_parmas()
+        cv_index = 0
 
-        if dataset == 'test_set':
-            self._NNDataP._prepare_test_dataloader(batch_size=self.batch_size)
-            dataloader = self._NNDataP.test_loader
-            self.ts_test_pred_label = torch.empty(0)
-            self.ts_test_label = torch.empty(0)
-        elif dataset == 'train_valid_set':
-            self._NNDataP._prepare_train_valid_dataloader(batch_size=self.batch_size)
-            dataloader = self._NNDataP.train_valid_loader
-            self.ts_train_valid_pred_label = torch.empty(0)
-            self.ts_train_valid_label = torch.empty(0)
+        for train_index, valid_index in self.cv_iterator.split(self._NNDataP.ts_categ_train_valid,
+                                                               self._NNDataP.ts_output_train_valid):
 
-        if not hasattr(self, 'best_model'):
-            raise AttributeError("object has no attribute 'best_model'" +
-                                 '\nyou need to train a model or load a model')
-
-        running_loss = 0.0
-        num_correct = 0
-        num_total_test = 0
-
-        # reduce memory consumption
-        with torch.no_grad():
-            self.best_model.eval()
-
-            for batch_idx, (ts_x_categ, ts_x_numer, ts_y) in enumerate(dataloader):
-
-                y_pred = self.best_model(ts_x_categ, ts_x_numer)
-                single_loss = self.loss_function(y_pred, ts_y)
-
-                running_loss += single_loss.item()
-                _, ts_y_pred = torch.max(y_pred, dim=1)
-
-                if dataset == 'test_set':
-                    self.ts_test_pred_label = torch.cat((self.ts_test_pred_label, ts_y_pred))
-                    self.ts_test_label = torch.cat((self.ts_test_label, ts_y))
-                elif dataset == 'train_valid_set':
-                    self.ts_train_valid_pred_label = torch.cat((self.ts_train_valid_pred_label, ts_y_pred))
-                    self.ts_train_valid_label = torch.cat((self.ts_train_valid_label, ts_y))
-
-                num_correct += torch.sum(ts_y_pred == ts_y).item()
-                num_total_test += ts_y.size(0)
-
-            test_accuracy = 100 * num_correct / num_total_test
-            test_loss = running_loss / len(dataloader)
-
-            if self.is_display_detail:
-                print(f'test loss: {test_loss:.4f}, test acc: {test_accuracy:.4f}')
-
-    def show_classification_report(self, dataset):
-
-        print("Classification report:")
-        x, y = self.__find_spec_set_records(dataset)
-
-        return pd.DataFrame(metrics.classification_report(
-            x, y, output_dict=True, target_names=['Not exited', 'Exited'])).T
-
-    def __build_cf_matrix(self, dataset):
-
-        x, y = self.__find_spec_set_records(dataset)
-
-        self.array_cf_matrix = confusion_matrix(x, y)
-
-    def plot_cf_matrix(self, dataset, normalize=None):
-
-        self.__build_cf_matrix(dataset)
-
-        # labels = ['True Neg','False Pos','False Neg','True Pos']
-        categories = ['Not Exited', 'Exited']
-        make_confusion_matrix(self.array_cf_matrix,
-                             group_names=None,
-                             categories=categories,
-                             cmap='Blues',
-                             figsize = (10, 5),
-                             normalize=normalize)
+            if cv_index == self.dict_best_parmas_to_test_model['best_cv_index']:
+                # use to find past train_loader
+                self._NNDataP.prepare_cv_dataloader(train_index, valid_index,
+                                                    self.batch_size, self.shuffle,
+                                                    self.oversampling_w)
+            cv_index += 1
 
     def __find_spec_set_records(self, dataset):
 
         if dataset == 'test_set':
-            if self.ts_test_pred_label is None:
-                raise AttributeError("the attribute 'ts_test_pred_label' is empty" +
+            if self.array_epoch_y_test_pred is None:
+                raise AttributeError("the attribute 'array_epoch_y_test_pred' is empty" +
                                      '\nyou need to test model by test_set before visualize data')
-            x = self.ts_test_label
-            y = self.ts_test_pred_label
+            x = self.array_epoch_y_test
+            y = self.array_epoch_y_test_pred
 
-        elif dataset == 'train_valid_set':
-            if self.ts_test_pred_label is None:
-                raise AttributeError("the attribute 'ts_train_valid_label' is empty" +
-                                     '\nyou need to test model by train_valid_set before visualize data')
-            x = self.ts_train_valid_label
-            y = self.ts_train_valid_pred_label
+        elif dataset == 'train_set':
+            if self.array_epoch_y_train_pred is None:
+                raise AttributeError("the attribute 'array_epoch_y_train_pred' is empty" +
+                                     '\nyou need to test model by train_set before visualize data')
+            x = self.array_epoch_y_train
+            y = self.array_epoch_y_train_pred
 
         return x, y
+
+    @staticmethod
+    def cal_accuracy(ts_y_pred, ts_y):
+
+        num_correct = torch.sum(ts_y_pred == ts_y).item()
+        num_data = ts_y.size(0)
+
+        return 100 * num_correct / num_data

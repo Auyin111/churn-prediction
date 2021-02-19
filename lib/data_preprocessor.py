@@ -35,16 +35,14 @@ class ChurnPredictionDataset(Dataset):
 
 class NNDataPreprocess:
 
-    def __init__(self, df_all_data, test_fraction=0.2, valid_fraction=0.2):
+    def __init__(self, df_all_data, test_fraction, seed, is_stratify):
         self.df_all_data = df_all_data
-        self.test_fraction = test_fraction
-        self.valid_fraction = valid_fraction
 
         self.__declare_interested_col_type()
         self.__preprocess_categorical_col()
         self.__get_embedding_sizes()
 
-        self.__train_test_split()
+        self.__train_test_split(test_size=test_fraction, random_state=seed, is_stratify=is_stratify)
 
         # __________init variable__________
         self._subset_ts_categ_train = None
@@ -89,7 +87,7 @@ class NNDataPreprocess:
 
         return list_added_col
 
-    def __train_test_split(self, test_size=0.2, random_state=42, is_stratify=True):
+    def __train_test_split(self, test_size, random_state, is_stratify):
         """is_stratify --> split the train test stratify"""
 
         # categorical data
@@ -130,7 +128,6 @@ class NNDataPreprocess:
         self._prepare_train_dataloader(batch_size, shuffle)
         self._prepare_valid_dataloader(batch_size, shuffle)
 
-    # TODO accpet array_weight
     def _create_weighted_train_sampler(self, oversampling_w):
 
         if oversampling_w == 'count_balance':
@@ -146,16 +143,6 @@ class NNDataPreprocess:
         ts_samples_weight = torch.from_numpy(array_samples_weight)
 
         self.weighted_sampler = WeightedRandomSampler(ts_samples_weight, len(ts_samples_weight))
-
-    def _prepare_train_valid_dataloader(self, batch_size):
-        """use to compare the performance of test_model between train_valid data and test data
-         so shuffle = False and sampler = None"""
-
-        self.train_valid_loader = DataLoader(ChurnPredictionDataset(
-            self.ts_categ_train_valid,
-            self.ts_numer_train_valid,
-            self.ts_output_train_valid,
-        ), batch_size=batch_size, shuffle=False, sampler=None)
 
     def _prepare_train_dataloader(self, batch_size, shuffle):
 
