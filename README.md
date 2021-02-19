@@ -27,13 +27,14 @@ The Underfitting should be cause by imbalance dataset, lack of enough training d
 
 ### Assign class weight and oversampling ###
 Using ***Max. f1 core in stead of Min. loss*** to find the best model <br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="100%" height="100%"> <br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_2.png" width="50%" height="50%"> <br> <br>
-***Test set confusion matrix (with class weight)***<br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set_with_class_weight.png" width="80%" height="80%"> <br> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_2.png" width="35%" height="35%"> <br> <br>
 ***Test set classification report (with class weight)***<br>
 The recall of 'Exited' is improved but the precision reduce. <br><br>
-<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_with_class_weight.png" width="80%" height="80%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set_with_class_weight.png" width="60%" height="60%"> <br> <br>
+
+***Test set confusion matrix (with class weight)***<br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_with_class_weight.png" width="60%" height="60%"> <br>
 37.10% of "Exited" are predicted as "Not exited" (already reduce 21.38%)
 
 ### Conclusion ###
