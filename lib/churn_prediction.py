@@ -238,7 +238,7 @@ class ChurnPrediction:
         # and if it has, it will make a checkpoint of the current model
         self.early_stopping(self.model, float_avg_epoch_loss, float_batch_f1)
 
-    def run_an_epoch(self, str_epoch_operation, data_loader, dataset=''):
+    def run_an_epoch(self, str_epoch_operation, data_loader, test_model_dataset=None):
 
         total_step = len(data_loader)
 
@@ -292,10 +292,10 @@ class ChurnPrediction:
         # back up the y and prediction when 'Testing'
         if str_epoch_operation == 'Testing':
 
-            if dataset == 'train_set':
+            if test_model_dataset == 'train_set':
                 self.array_epoch_y_train = array_epoch_y
                 self.array_epoch_y_train_pred = array_epoch_y_pred
-            elif dataset == 'test_set':
+            elif test_model_dataset == 'test_set':
                 self.array_epoch_y_test = array_epoch_y
                 self.array_epoch_y_test_pred = array_epoch_y_pred
 
@@ -403,7 +403,7 @@ class ChurnPrediction:
 
         torch.set_grad_enabled(False)
         _, _, _ = \
-            self.run_an_epoch(str_epoch_operation, dataloader, dataset)
+            self.run_an_epoch(str_epoch_operation, dataloader, test_model_dataset=dataset)
         torch.set_grad_enabled(True)
     # _____________
 
@@ -572,7 +572,7 @@ class ChurnPrediction:
             torch.backends.cudnn.benchmark = False
 
     def __prepare_best_cv_dataloader(self):
-        """use the best_cv_index to find back the train_iterator"""
+        """use the best_cv_index to find back the train_dataloader"""
 
         cv_index = 0
 
@@ -580,7 +580,7 @@ class ChurnPrediction:
                                                                self._NNDataP.ts_output_train_valid):
 
             if cv_index == self.dict_best_parmas_to_test_model['best_cv_index']:
-                # use to find past train_loader
+                # use to find past train_loader only
                 self._NNDataP.prepare_cv_dataloader(train_index, valid_index,
                                                     self.batch_size, self.shuffle,
                                                     self.oversampling_w)

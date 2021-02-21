@@ -22,6 +22,7 @@ class ChartVisualizer:
         fig.update_traces(textposition=textposition, textinfo=textinfo)
         fig.show("png")
 
+
 def make_confusion_matrix(cf,
                           group_names=None,
                           categories='auto',
