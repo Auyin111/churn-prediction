@@ -255,7 +255,6 @@ class ChurnPrediction:
             ts_y_pred_values = self.model(ts_x_categ, ts_x_numer)
             _, ts_y_pred = torch.max(ts_y_pred_values, dim=1)
 
-            # ts_rounded_pred = torch.round(torch.sigmoid(ts_y_pred_values))
             ts_batch_loss = self.loss_function(ts_y_pred_values, ts_y)
 
             # backup, then find acc and f1 later
@@ -452,7 +451,6 @@ class ChurnPrediction:
     # ______________
 
     # _______logging_______
-
     def __create_tsboard_writer(self):
 
         # Comment log_dir suffix appended to the default log_dir. If log_dir is assigned, this argument has no effect.

@@ -10,10 +10,10 @@ class NNModel(nn.Module):
         self.embedding_dropout = nn.Dropout(dropout_percent)
         self.batch_norm_num = nn.BatchNorm1d(num_numerical_cols)
 
-        all_layers = []
         num_categorical_cols = sum((nf for ni, nf in embedding_size))
         input_size = num_categorical_cols + num_numerical_cols
 
+        all_layers = []
         for i in list_layers_input_size:
             all_layers.append(nn.Linear(input_size, i))
             all_layers.append(nn.ReLU(inplace=True))
