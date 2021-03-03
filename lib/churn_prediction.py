@@ -578,10 +578,10 @@ class ChurnPrediction:
                                                                self._NNDataP.ts_output_train_valid):
 
             if cv_index == self.dict_best_parmas_to_test_model['best_cv_index']:
-                # use to find past train_loader only
+                # use to find past train_loader only (do not need oversampling_w)
                 self._NNDataP.prepare_cv_dataloader(train_index, valid_index,
                                                     self.batch_size, self.shuffle,
-                                                    self.oversampling_w)
+                                                    oversampling_w=None)
             cv_index += 1
 
     def __find_spec_set_records(self, dataset):
