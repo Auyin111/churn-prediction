@@ -1,3 +1,5 @@
+import abc
+import os
 import torch
 import torch.nn as nn
 import datetime
@@ -21,7 +23,80 @@ from lib.parameter_selector import ParmasSelector
 model = TypeVar(torch.nn.modules.module.Module)
 
 
-class ChurnPrediction:
+class ModelTrainerBase(abc.ABC):
+
+    ####################
+    # select, show and preprocess parmas setting
+    # ==================
+
+    @abc.abstractmethod
+    def select_parmas(self, str_selection):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def show_available_parmas_options(self):
+        return NotImplemented
+
+    @staticmethod
+    @abc.abstractmethod
+    def product_dict(**kwargs):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def drop_parmas_combinations(self):
+        return NotImplemented
+
+    ####################
+    # train, valid, cv, test
+    # ==================
+
+    @abc.abstractmethod
+    def train_an_epoch(self, str_epoch_operation='Training'):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def validate_an_epoch(self, str_epoch_operation='Validation'):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def run_an_epoch(self, str_epoch_operation, data_iterator, test_model_dataset=None):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def cross_validate(self, cv_strategy: str, num_max_epochs=10, patience=10, is_log_in_tsboard=True,
+                       log_dir=None, cv_n_splits=5, is_backup_best_model=True):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def test_model(self, dataset, str_epoch_operation='Testing'):
+        return NotImplemented
+
+    ####################
+    # visualize setting and performance
+    # ==================
+
+    @abc.abstractmethod
+    def preview_model(self):
+        return NotImplemented
+
+    # @abc.abstractmethod
+    # def count_parameters(self):
+    #     return NotImplemented
+
+    @abc.abstractmethod
+    def show_label_distribution(self):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def show_classification_report(self, dataset):
+        return NotImplemented
+
+    @abc.abstractmethod
+    def plot_cf_matrix(self, dataset, normalize=None):
+        return NotImplemented
+
+
+class ModelTrainer(ModelTrainerBase):
 
     def __init__(self, df_all_data, is_display_detail=True, is_display_batch_info=False, seed=0, is_stratify=True):
 
@@ -307,6 +382,11 @@ class ChurnPrediction:
         the best parameters is considered by the best valid loss"""
 
         self.cv_strategy = cv_strategy
+        if os.getenv('envir') == 'uat':
+            self.num_max_epochs = 3
+            patience = 2
+        else:
+            self.num_max_epochs = num_max_epochs
         self.is_log_in_tsboard = is_log_in_tsboard
         self.log_dir = log_dir
 

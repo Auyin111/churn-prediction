@@ -1,4 +1,5 @@
 import torch
+import os
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -37,6 +38,11 @@ class ChurnPredictionDataset(Dataset):
 class NNDataPreprocess:
 
     def __init__(self, df_all_data, test_fraction, seed, is_stratify):
+
+        if os.getenv('envir') == 'uat':
+            df_all_data = df_all_data.head(300)
+            print('Reminder: in uat environment\n')
+
         self.df_all_data = df_all_data
 
         self.__declare_interested_col_type()
