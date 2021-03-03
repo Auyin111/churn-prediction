@@ -6,6 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
+# . file
+.idea/
+.data/
+
+# tensorboard logging
+events.out.tfevents*
+
 # Distribution / packaging
 .Python
 build/
