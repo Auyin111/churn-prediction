@@ -27,16 +27,20 @@ The Underfitting should be cause by imbalance dataset, lack of enough training d
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/dataset_detail.png" width="50%" height="50%"> <br><br><br>
 
 ### Assign class weight and oversampling ###
-Using ***Max. f1 core in stead of Min. loss*** to find the best model <br>
+Try using ***Max. f1 score in stead of Min. loss*** to find the best model <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/f1_of_training_and_validation_curve_2.png" width="35%" height="35%"> <br> <br>
+Try using ***Max. recall in stead of Min. loss*** to find the best model <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/recall_of_training_and_validation_curve_1.png" width="70%" height="70%"> <br>
+<img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/recall_of_training_and_validation_curve_2.png" width="35%" height="35%"> <br> <br>
+
 ***Test set classification report (with class weight)***<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/classification_report__test_set_with_class_weight.png" width="60%" height="60%"> <br>
 The recall of 'Exited' is improved but the precision reduce. <br>
 
 ***Test set confusion matrix (with class weight)***<br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/confusion_matrix_test_set_with_class_weight.png" width="60%" height="60%"> <br>
-37.10% of "Exited" are predicted as "Not exited" (already reduce 21.38%)
+28.01% of "Exited" are predicted as "Not exited" (already reduce 28.99%)
 
 ### Conclusion ###
 1) A greater number of data should be collected, and more useful features <br>
@@ -46,13 +50,16 @@ The recall of 'Exited' is improved but the precision reduce. <br>
 3) In this business case, the recall of 'Exited' is much more important than precision of 'Exited'
     - Low precision of 'Not exited' will increase the promotion cost when we re-engage customer
     - But low recall of 'Exited' will loss the customer
+    - Discuss with team member to choose either f1 score or recall as cv_strategy
 
 ## Model tuning ##
 Allow to cross validate different kind of parameters easily in a dictionary, such as optimizer, dataloader, loss function, model and model structure <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/declare_tuning_parmas.png" width="40%" height="40%"> <br>
 
-The cross validation training and validation curve will be stored and display on tensorboard ***instantly*** so you can stop a model if you find the trend is not good in any time <br>
+The cross validation training curve, validation curve, f1, precision and recall will be stored and display on tensorboard ***instantly*** so you can stop a model if you find the trend is not good in any time <br>
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/tsboard_demo.png" width="60%" height="60%"> <br>
+
+Some of the project is more concern on recall, you can edit the current 'cv_strategy' after cross validation to view the model performance such as confusion matrix and classification report <br>
 
 Also, a df will show the CV performance of all parameter’s combinations.
 <img src="https://github.com/Auyin111/churn-prediction/blob/master/readme%20photo/cross_validation_performance.png" width="80%" height="80%"> <br>
