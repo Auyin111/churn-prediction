@@ -1,11 +1,14 @@
 import torch
-import os
-import numpy as np
 import pandas as pd
+import warnings
+import numpy as np
+
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader, Subset, WeightedRandomSampler
 
 pd.set_option('mode.chained_assignment', None)
+# TODO: not ignore warning
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 class ChurnPredictionDataset(Dataset):
@@ -38,10 +41,6 @@ class ChurnPredictionDataset(Dataset):
 class NNDataPreprocess:
 
     def __init__(self, df_all_data, test_fraction, seed, is_stratify):
-
-        if os.getenv('envir') == 'uat':
-            df_all_data = df_all_data.head(300)
-            print('Reminder: in uat environment\n')
 
         self.df_all_data = df_all_data
 

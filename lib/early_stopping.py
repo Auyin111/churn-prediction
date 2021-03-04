@@ -32,13 +32,13 @@ class EarlyStopping:
 
         print("EarlyStopping object created")
 
-    def __call__(self, model, val_loss, f1):
+    def __call__(self, model, val_loss, f1, precision, recall):
 
         score = -val_loss
 
         if self.best_score is None:
-            self.best_score = score
-            self.f1 = f1
+            self.__backup_performance(score, f1, precision, recall)
+
             if self.is_save_checkpoint:
                 self.save_checkpoint(val_loss, model)
         elif score < self.best_score + self.delta:
@@ -48,8 +48,8 @@ class EarlyStopping:
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
-            self.best_score = score
-            self.f1 = f1
+            self.__backup_performance(score, f1, precision, recall)
+
             if self.is_save_checkpoint:
                 self.save_checkpoint(val_loss, model)
             self.counter = 0
@@ -60,3 +60,10 @@ class EarlyStopping:
             self.trace_func(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
         torch.save(model.state_dict(), self.path)
         self.val_loss_min = val_loss
+
+    def __backup_performance(self, score, f1, precision, recall):
+
+        self.best_score = score
+        self.f1 = f1
+        self.precision = precision
+        self.recall = recall

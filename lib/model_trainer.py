@@ -79,10 +79,6 @@ class ModelTrainerBase(abc.ABC):
     def preview_model(self):
         return NotImplemented
 
-    # @abc.abstractmethod
-    # def count_parameters(self):
-    #     return NotImplemented
-
     @abc.abstractmethod
     def show_label_distribution(self):
         return NotImplemented
@@ -105,6 +101,10 @@ class ModelTrainer(ModelTrainerBase):
 
         self.__init_seeds(seed)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        if os.getenv('envir') == 'uat':
+            df_all_data = df_all_data.head(1000)
+            print('Reminder: in uat environment\n')
 
         self._NNDataP = NNDataPreprocess(df_all_data, test_fraction=0.2, seed=seed, is_stratify=is_stratify)
         self._chart_visual = ChartVisualizer()
@@ -159,7 +159,10 @@ class ModelTrainer(ModelTrainerBase):
 
         print("ChurnPrediction object created")
 
-    # _______show and edit parmas setting_______
+    ####################
+    # select, show and preprocess parmas setting
+    # ==================
+
     def select_parmas(self, str_selection):
 
         self.parameters = self._parmas_selector.select(str_selection)
@@ -216,9 +219,12 @@ class ModelTrainer(ModelTrainerBase):
 
         if len_df_org != len(self.__df_all_combinations):
             print(f'{len_df_org - len(self.__df_all_combinations)} combinations is dropped')
-    # ______________
+        # TODO warning: do not have and combination
 
-    # _______prepare, extract and load parmas_______
+    ####################
+    # prepare, extract and load parmas
+    # ==================
+
     def __prepare_parmas_desc(self):
         """create 'desc' column by considering all the parmas in that row"""
 
@@ -275,14 +281,16 @@ class ModelTrainer(ModelTrainerBase):
         self.optimizer = optimizer(self.model.parameters(), lr=self.lr, amsgrad=self.amsgrad)
 
         self.loss_function = nn.CrossEntropyLoss(weight=self.class_weight).to(self.device)
-    # ______________
 
-    # _______train, valid, cv, test______
+    ####################
+    # train, valid, cv, test
+    # ==================
+
     def train_an_epoch(self, str_epoch_operation='Training'):
 
         self.model.train()
 
-        float_avg_epoch_loss, float_epoch_acc, float_batch_f1 = \
+        float_avg_epoch_loss, float_epoch_acc, float_batch_f1, float_batch_precis, float_batch_recall = \
             self.run_an_epoch(str_epoch_operation, self._NNDataP.train_loader)
 
         # _____logging_____
@@ -290,14 +298,15 @@ class ModelTrainer(ModelTrainerBase):
             self.__log_epoch_perf(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc, float_batch_f1)
 
         if self.is_log_in_tsboard:
-            self.__log_in_tsboard(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc, float_batch_f1)
+            self.__log_in_tsboard(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc,
+                                  float_batch_f1, float_batch_precis, float_batch_recall)
 
     def validate_an_epoch(self, str_epoch_operation='Validation'):
 
         self.model.eval()
 
         torch.set_grad_enabled(False)
-        float_avg_epoch_loss, float_epoch_acc, float_batch_f1 = \
+        float_avg_epoch_loss, float_epoch_acc, float_batch_f1, float_batch_precis, float_batch_recall = \
             self.run_an_epoch(str_epoch_operation, self._NNDataP.valid_loader)
         torch.set_grad_enabled(True)
 
@@ -306,12 +315,13 @@ class ModelTrainer(ModelTrainerBase):
             self.__log_epoch_perf(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc, float_batch_f1)
 
         if self.is_log_in_tsboard:
-            self.__log_in_tsboard(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc, float_batch_f1)
+            self.__log_in_tsboard(str_epoch_operation, float_avg_epoch_loss, float_epoch_acc,
+                                  float_batch_f1, float_batch_precis, float_batch_recall)
         # __________
 
         # early_stopping needs the validation loss to check if it has improved,
         # and if it has, it will make a checkpoint of the current model
-        self.early_stopping(self.model, float_avg_epoch_loss, float_batch_f1)
+        self.early_stopping(self.model, float_avg_epoch_loss, float_batch_f1, float_batch_precis, float_batch_recall)
 
     def run_an_epoch(self, str_epoch_operation, data_loader, test_model_dataset=None):
 
@@ -358,10 +368,8 @@ class ModelTrainer(ModelTrainerBase):
         array_epoch_y = ts_epoch_y.cpu().detach().numpy()
         array_epoch_y_pred = ts_epoch_y_pred.cpu().detach().numpy()
 
-        float_batch_f1 = sklearn.metrics.f1_score(array_epoch_y,
-                                                  array_epoch_y_pred,
-                                                  labels=None, pos_label=1, average='macro',
-                                                  zero_division='warn')
+        float_batch_f1, float_batch_precis, float_batch_recall = self.__find_more_scores(array_epoch_y,
+                                                                                         array_epoch_y_pred)
 
         # back up the y and prediction when 'Testing'
         if str_epoch_operation == 'Testing':
@@ -373,7 +381,7 @@ class ModelTrainer(ModelTrainerBase):
                 self.array_epoch_y_test = array_epoch_y
                 self.array_epoch_y_test_pred = array_epoch_y_pred
 
-        return float_avg_epoch_loss, float_epoch_acc, float_batch_f1
+        return float_avg_epoch_loss, float_epoch_acc, float_batch_f1, float_batch_precis, float_batch_recall
 
     # find the best model by cv
     def cross_validate(self, cv_strategy: str, num_max_epochs=10, patience=10, is_log_in_tsboard=True,
@@ -438,23 +446,15 @@ class ModelTrainer(ModelTrainerBase):
                 # load the last checkpoint with the best model
                 self.model.load_state_dict(torch.load('checkpoint.pt'))
 
-                # backup the best model each of the cv and it loss
-                if model_idx not in self.dict_cv_model_and_loss.keys():
-                    self.dict_cv_model_and_loss[model_idx] = {}
-                if (self.cv_num - 1) not in self.dict_cv_model_and_loss[model_idx].keys():
-                    self.dict_cv_model_and_loss[model_idx][self.cv_num - 1] = {}
-
-                # record all the model and it best loss (remark: self.cv_num - 1 = cv number index)
-                self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['model'] = self.model
-                self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_loss'] = - self.early_stopping.best_score
-                self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_f1'] = self.early_stopping.f1
+                self.__backup_cv_model_info(model_idx)
 
                 self.cv_num += 1
 
                 print('')
 
         print('\nAll model is trained successfully')
-        self.__find_best_model_and_parma()
+        self.__preprocess_cv_performance()
+        self.find_best_model_by_strategy()
 
     def test_model(self, dataset, str_epoch_operation='Testing'):
 
@@ -481,12 +481,14 @@ class ModelTrainer(ModelTrainerBase):
         self.model.eval()
 
         torch.set_grad_enabled(False)
-        _, _, _ = \
+        _, _, _, _, _ = \
             self.run_an_epoch(str_epoch_operation, dataloader, test_model_dataset=dataset)
         torch.set_grad_enabled(True)
-    # _____________
 
-    # _______visualize setting and performance_______
+    ####################
+    # visualize setting and performance
+    # ==================
+
     def preview_model(self):
 
         return print(self.model)
@@ -528,9 +530,11 @@ class ModelTrainer(ModelTrainerBase):
                               cmap='Blues',
                               figsize=(10, 5),
                               normalize=normalize)
-    # ______________
 
-    # _______logging_______
+    ####################
+    # logging
+    # ==================
+
     def __create_tsboard_writer(self):
 
         # Comment log_dir suffix appended to the default log_dir. If log_dir is assigned, this argument has no effect.
@@ -557,7 +561,8 @@ class ModelTrainer(ModelTrainerBase):
             f', f1: {float_batch_f1:.4f}'
         )
 
-    def __log_in_tsboard(self, str_tsboard_subgrp, float_avg_epoch_loss, float_epoch_acc, float_batch_f1):
+    def __log_in_tsboard(self, str_tsboard_subgrp, float_avg_epoch_loss, float_epoch_acc,
+                         float_batch_f1, float_batch_precis, float_batch_recall):
 
         self.writer.add_scalar(
             f'Loss/{str_tsboard_subgrp} cv_{self.cv_num}', float_avg_epoch_loss, self.epoch
@@ -568,12 +573,22 @@ class ModelTrainer(ModelTrainerBase):
         self.writer.add_scalar(
             f'f1/{str_tsboard_subgrp} cv_{self.cv_num}', float_batch_f1, self.epoch
         )
-    # ______________
+        self.writer.add_scalar(
+            f'Precision/{str_tsboard_subgrp} cv_{self.cv_num}', float_batch_precis, self.epoch
+        )
+        self.writer.add_scalar(
+            f'Recall/{str_tsboard_subgrp} cv_{self.cv_num}', float_batch_recall, self.epoch
+        )
 
-    # _______find best model and parmas______
-    def __find_best_model_and_parma(self):
+    ####################
+    # find best model and parmas
+    # ==================
 
-        self.__preprocess_cv_performance()
+    def find_best_model_by_strategy(self, cv_strategy=None):
+
+        if cv_strategy is not None:
+            self.cv_strategy = cv_strategy
+        self.__rank_cv_performance()
 
         df_best_model_cv_perf = self.df_cv_performance.head(1)
 
@@ -590,51 +605,103 @@ class ModelTrainer(ModelTrainerBase):
 
     def __preprocess_cv_performance(self):
 
-        list_list_cv_loss, list_list_cv_f1 = self.__extract_cv_performance_from_dict()
-        df_cv_performance = self.__assign_cv_performance_in_df(list_list_cv_loss, list_list_cv_f1)
+        list_list_cv_loss, list_list_cv_f1, list_list_cv_precis, list_list_cv_recall \
+            = self.__extract_cv_performance_from_dict()
+        self.df_cv_performance = self.__assign_cv_performance_in_df(list_list_cv_loss, list_list_cv_f1,
+                                                                    list_list_cv_precis, list_list_cv_recall)
 
         # 'model_index' is used to find the best parameter and the best cv number
         # the order of df_cv_performance is equal to dict_cv_model_and_loss are some
-        df_cv_performance['model_index'] = [model_index for model_index in self.dict_cv_model_and_loss.keys()]
+        self.df_cv_performance['model_index'] = [model_index for model_index in self.dict_cv_model_and_loss.keys()]
+
+    def __rank_cv_performance(self):
 
         if self.cv_strategy == 'min_loss':
-            df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_loss'].apply(lambda x: x.index(min(x)))
-            self.df_cv_performance = df_cv_performance.sort_values('mean_cv_loss')
+            self.df_cv_performance['best_cv_index'] = self.df_cv_performance['list_cv_loss'].apply(lambda x: x.index(min(x)))
+            self.df_cv_performance.sort_values('mean_cv_loss', inplace=True)
         elif self.cv_strategy == 'max_f1':
-            df_cv_performance['best_cv_index'] = df_cv_performance['list_cv_f1'].apply(lambda x: x.index(max(x)))
-            self.df_cv_performance = df_cv_performance.sort_values('mean_cv_f1', ascending=False)
+            self.df_cv_performance['best_cv_index'] = self.df_cv_performance['list_cv_f1'].apply(lambda x: x.index(max(x)))
+            self.df_cv_performance.sort_values('mean_cv_f1', inplace=True, ascending=False)
+        elif self.cv_strategy == 'max_precis':
+            self.df_cv_performance['best_cv_index'] = self.df_cv_performance['list_cv_precis'].apply(lambda x: x.index(max(x)))
+            self.df_cv_performance.sort_values('mean_cv_precis', inplace=True, ascending=False)
+        elif self.cv_strategy == 'max_recall':
+            self.df_cv_performance['best_cv_index'] = self.df_cv_performance['list_cv_recall'].apply(lambda x: x.index(max(x)))
+            self.df_cv_performance.sort_values('mean_cv_recall', inplace=True, ascending=False)
 
     def __extract_cv_performance_from_dict(self):
 
         list_list_cv_loss: List[List[float]] = []
         list_list_cv_f1: List[List[float]] = []
+        list_list_cv_precis: List[List[float]] = []
+        list_list_cv_recall: List[List[float]] = []
+
         for model_index, dict_cv_index_model_and_loss in self.dict_cv_model_and_loss.items():
+
             list_cv_loss = []
             list_cv_f1 = []
+            list_cv_precis = []
+            list_cv_recall = []
+
             for cv_index, dict_model_and_loss in dict_cv_index_model_and_loss.items():
+
                 list_cv_loss.append(dict_model_and_loss['cv_loss'])
                 list_cv_f1.append(dict_model_and_loss['cv_f1'])
+                list_cv_precis.append(dict_model_and_loss['cv_precis'])
+                list_cv_recall.append(dict_model_and_loss['cv_recall'])
+
             list_list_cv_loss.append(list_cv_loss)
             list_list_cv_f1.append(list_cv_f1)
+            list_list_cv_precis.append(list_cv_precis)
+            list_list_cv_recall.append(list_cv_recall)
 
-        return list_list_cv_loss, list_list_cv_f1
+        return list_list_cv_loss, list_list_cv_f1, list_list_cv_precis, list_list_cv_recall
 
-    def __assign_cv_performance_in_df(self, list_list_cv_loss, list_list_cv_f1):
+    def __assign_cv_performance_in_df(self, list_list_cv_loss,
+                                      list_list_cv_f1, list_list_cv_precis, list_list_cv_recall):
 
         df_cv_performance = self.__df_all_combinations.copy()
 
-        df_cv_performance['list_cv_loss'] = list_list_cv_loss
-        df_cv_performance['mean_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.mean(x))
-        df_cv_performance['std_cv_loss'] = df_cv_performance['list_cv_loss'].apply(lambda x: np.std(x))
+        df_cv_performance = self.__assign_one_score_in_df(df_cv_performance, list_list_cv_loss, 'loss')
 
-        df_cv_performance['list_cv_f1'] = list_list_cv_f1
-        df_cv_performance['mean_cv_f1'] = df_cv_performance['list_cv_f1'].apply(lambda x: np.mean(x))
-        df_cv_performance['std_cv_f1'] = df_cv_performance['list_cv_f1'].apply(lambda x: np.std(x))
+        df_cv_performance = self.__assign_one_score_in_df(df_cv_performance, list_list_cv_f1, 'f1')
+        df_cv_performance = self.__assign_one_score_in_df(df_cv_performance, list_list_cv_precis, 'precis')
+        df_cv_performance = self.__assign_one_score_in_df(df_cv_performance, list_list_cv_recall, 'recall')
 
         return df_cv_performance
-    # _____________
 
-    # _______other_______
+    @staticmethod
+    def __assign_one_score_in_df(df_cv_performance, list_list_cv_score, score_label):
+        """score_label can be 'loss', 'f1' and etc."""
+
+        df_cv_performance[f'list_cv_{score_label}'] = list_list_cv_score
+        df_cv_performance[f'mean_cv_{score_label}'] = df_cv_performance[f'list_cv_{score_label}'].apply(
+            lambda x: np.mean(x))
+        df_cv_performance[f'std_cv_{score_label}'] = df_cv_performance[f'list_cv_{score_label}'].apply(
+            lambda x: np.std(x))
+
+        return df_cv_performance
+
+    def __backup_cv_model_info(self, model_idx):
+
+        # backup the best model each of the cv and it loss
+        if model_idx not in self.dict_cv_model_and_loss.keys():
+            self.dict_cv_model_and_loss[model_idx] = {}
+        if (self.cv_num - 1) not in self.dict_cv_model_and_loss[model_idx].keys():
+            self.dict_cv_model_and_loss[model_idx][self.cv_num - 1] = {}
+
+        # record all the model and it best loss (remark: self.cv_num - 1 = cv number index)
+        self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['model'] = self.model
+        self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_loss'] = - self.early_stopping.best_score
+
+        self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_f1'] = self.early_stopping.f1
+        self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_precis'] = self.early_stopping.precision
+        self.dict_cv_model_and_loss[model_idx][self.cv_num - 1]['cv_recall'] = self.early_stopping.recall
+
+    ####################
+    # other
+    # ==================
+
     @staticmethod
     def __init_seeds(seed):
         torch.manual_seed(seed)  # sets the seed for generating random numbers.
@@ -689,3 +756,26 @@ class ModelTrainer(ModelTrainerBase):
         num_data = ts_y.size(0)
 
         return 100 * num_correct / num_data
+
+    @staticmethod
+    def __find_more_scores(array_epoch_y, array_epoch_y_pred):
+        """find f1, precision and recall"""
+
+        # 'macro' calculates the F1 separated by class but not using weights for the aggregation:
+        # which results in a bigger penalisation when your model does not perform well with the minority classes
+        float_batch_f1 = sklearn.metrics.f1_score(array_epoch_y,
+                                                  array_epoch_y_pred,
+                                                  labels=None, pos_label=1, average='macro',
+                                                  zero_division='warn')
+
+        float_batch_precis = sklearn.metrics.precision_score(array_epoch_y,
+                                                             array_epoch_y_pred,
+                                                             labels=None, pos_label=1, average='macro',
+                                                             zero_division=0)
+
+        float_batch_recall = sklearn.metrics.recall_score(array_epoch_y,
+                                                          array_epoch_y_pred,
+                                                          labels=None, pos_label=1, average='macro',
+                                                          zero_division='warn')
+
+        return float_batch_f1, float_batch_precis, float_batch_recall

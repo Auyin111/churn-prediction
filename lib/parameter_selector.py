@@ -42,15 +42,15 @@ class ParmasSelector(object):
 
             # dataloader_parmas
             batch_size=[1000],
-            shuffle=[True, False],
+            shuffle=[True],
 
             # loss_function_parmas
             # e.g. None or torch.tensor([x.0, y.0])
             class_weight=[None],
 
             # model_parmas
-            dropout_percent=[0.4, 0.5],
-            list_layers_input_size=[[200, 100, 50]],
+            dropout_percent=[0.5],
+            list_layers_input_size=[[200, 100]],
 
             # oversampling_weight
             # e.g. 'count_balance' or np.array([x, y])
@@ -76,8 +76,8 @@ class ParmasSelector(object):
             class_weight=[torch.tensor([1.0, 4.0]), torch.tensor([1.0, 3.0]), torch.tensor([1.0, 2.0])],
 
             # model_parmas
-            dropout_percent=[0.4, 0.5],
-            list_layers_input_size=[[200, 100, 50]],
+            dropout_percent=[0.5],
+            list_layers_input_size=[[200, 100]],
 
             # oversampling_weight
             # e.g. 'count_balance' or np.array([x, y])
@@ -96,6 +96,7 @@ class ParmasSelector(object):
 
             # dataloader_parmas
             batch_size=[1000],
+            # sampler option is mutually exclusive with shuffle
             shuffle=[False],
 
             # loss_function_parmas
@@ -103,8 +104,8 @@ class ParmasSelector(object):
             class_weight=[None],
 
             # model_parmas
-            dropout_percent=[0.4, 0.5],
-            list_layers_input_size=[[200, 100, 50]],
+            dropout_percent=[0.5],
+            list_layers_input_size=[[200, 100]],
 
             # oversampling_weight
             # e.g. 'count_balance' or np.array([x, y])
